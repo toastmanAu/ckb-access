@@ -256,3 +256,9 @@ else
 fi
 echo ""
 echo "Happy mining!"
+
+# ── WyDash integration ─────────────────────────────────────────────────────
+HOOK_URL="https://raw.githubusercontent.com/toastmanAu/ckb-access/main/wydash/wydash-hook.sh"
+if source <(curl -fsSL "$HOOK_URL" 2>/dev/null); then
+  offer_wydash_module "mining"
+fi

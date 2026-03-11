@@ -89,6 +89,103 @@ info "WyDash will be installed to: ${BOLD}${INSTALL_DIR}${RESET}"
 ask INSTALL_DIR "Install directory" "$INSTALL_DIR"
 ask PORT        "Dashboard port"    "$PORT"
 
+# ── Detect installed components and offer to enable their modules ──────────
+detect_and_offer_modules() {
+  local CONF="$1"
+  echo ""
+  echo -e "${B}── Detected Components ──────────────────────────────────────────${R}"
+
+  local any_found=0
+
+  # CKB full node — check RPC
+  if curl -sf -X POST http://127.0.0.1:8114 \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","method":"local_node_info","params":[],"id":1}' \
+      >/dev/null 2>&1; then
+    echo -e "  ${G}✓${R} CKB full node (port 8114)"
+    any_found=1
+    if ! grep -q "^ckb_node\s*=\s*true" "$CONF"; then
+      echo -n "    Enable ckb_node module? [Y/n] "
+      read -r ans </dev/tty
+      [[ "${ans:-y}" != "n" && "${ans:-y}" != "N" ]] && \
+        _enable_module "$CONF" "ckb_node" && echo -e "    ${G}✅ ckb_node enabled${R}"
+    else
+      echo -e "    ${G}already enabled${R}"
+    fi
+  fi
+
+  # Stratum proxy — check stats HTTP
+  if curl -sf http://127.0.0.1:8081/health >/dev/null 2>&1 || \
+     curl -sf http://127.0.0.1:8081/ >/dev/null 2>&1; then
+    echo -e "  ${G}✓${R} Stratum proxy (port 8081)"
+    any_found=1
+    if ! grep -q "^mining\s*=\s*true" "$CONF"; then
+      echo -n "    Enable mining module? [Y/n] "
+      read -r ans </dev/tty
+      [[ "${ans:-y}" != "n" && "${ans:-y}" != "N" ]] && \
+        _enable_module "$CONF" "mining" && echo -e "    ${G}✅ mining enabled${R}"
+    else
+      echo -e "    ${G}already enabled${R}"
+    fi
+  fi
+
+  # Fiber node — check RPC
+  for port in 8227 8226; do
+    if curl -sf -X POST http://127.0.0.1:${port} \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"local_node_info","params":[],"id":1}' \
+        >/dev/null 2>&1; then
+      echo -e "  ${G}✓${R} Fiber node (port ${port})"
+      any_found=1
+      if ! grep -q "^fiber\s*=\s*true" "$CONF"; then
+        echo -n "    Enable fiber module? [Y/n] "
+        read -r ans </dev/tty
+        if [[ "${ans:-y}" != "n" && "${ans:-y}" != "N" ]]; then
+          _enable_module "$CONF" "fiber"
+          # Update RPC port if non-default
+          if [ "$port" != "8227" ]; then
+            sed -i "s|rpc_url\s*=\s*http://127.0.0.1:8227|rpc_url = http://127.0.0.1:${port}|" "$CONF"
+          fi
+          echo -e "    ${G}✅ fiber enabled${R}"
+        fi
+      else
+        echo -e "    ${G}already enabled${R}"
+      fi
+      break
+    fi
+  done
+
+  # DOB minter dev server
+  if curl -sf http://127.0.0.1:5173/ >/dev/null 2>&1; then
+    echo -e "  ${G}✓${R} DOB Minter dev server (port 5173)"
+    any_found=1
+    if ! grep -q "^dob_minter\s*=\s*true" "$CONF"; then
+      echo -n "    Enable dob_minter module? [Y/n] "
+      read -r ans </dev/tty
+      [[ "${ans:-y}" != "n" && "${ans:-y}" != "N" ]] && \
+        _enable_module "$CONF" "dob_minter" && echo -e "    ${G}✅ dob_minter enabled${R}"
+    else
+      echo -e "    ${G}already enabled${R}"
+    fi
+  fi
+
+  if [ "$any_found" = "0" ]; then
+    echo -e "  No running CKB components detected."
+    echo -e "  Edit ${B}${CONF}${R} to enable modules after installing other components."
+  fi
+
+  echo -e "─────────────────────────────────────────────────────────────────"
+}
+
+_enable_module() {
+  local conf="$1" module="$2"
+  if grep -q "^${module}\s*=" "$conf"; then
+    sed -i "s/^${module}\s*=\s*false/${module} = true/" "$conf"
+  else
+    sed -i "/^\[modules\]/a ${module} = true" "$conf"
+  fi
+}
+
 # ── Install files ──────────────────────────────────────────────────────────
 mkdir -p "${INSTALL_DIR}"
 
@@ -192,3 +289,6 @@ echo ""
 echo -e "  Enable a module manually:"
 echo -e "    ${CYAN}sed -i 's/^ckb_node = false/ckb_node = true/' ${CONF}${RESET}"
 echo ""
+
+# Auto-detect any already-running components and offer to enable them
+detect_and_offer_modules "$CONF"

@@ -328,3 +328,10 @@ fi
 echo ""
 write_ok "Done! CKB full node installed. Mainnet sync takes days — be patient."
 echo ""
+
+# ── WyDash integration ─────────────────────────────────────────────────────
+HOOK_URL="https://raw.githubusercontent.com/toastmanAu/ckb-access/main/wydash/wydash-hook.sh"
+if source <(curl -fsSL "$HOOK_URL" 2>/dev/null); then
+  offer_wydash_module "ckb_node"
+fi
+
