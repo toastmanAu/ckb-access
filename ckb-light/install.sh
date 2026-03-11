@@ -24,7 +24,15 @@ case "$OS" in
   Linux)
     case "$ARCH" in
       x86_64)  TARBALL="ckb-light-client_v${VERSION}-x86_64-linux.tar.gz" ;;
-      aarch64) TARBALL="ckb-light-client_v${VERSION}-aarch64-linux.tar.gz" ;;
+      aarch64)
+        echo ""
+        echo "  NOTE: No official arm64 binary for ckb-light-client yet."
+        echo "  Pre-built binaries are x86_64 only."
+        echo "  To build from source: https://github.com/nervosnetwork/ckb-light-client"
+        echo "  Or run on an x86_64 machine (Linux/macOS/Windows)."
+        echo ""
+        exit 1
+        ;;
       *)       echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
     IS_LINUX=1; IS_MAC=0
