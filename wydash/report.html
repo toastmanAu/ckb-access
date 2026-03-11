@@ -319,8 +319,13 @@ function startOAuth() {
   const state = Math.random().toString(36).slice(2);
   sessionStorage.setItem('oauth_state', state);
   const clientId = 'Ov23litGWdXhs1WCL90G';
-  const redirect = encodeURIComponent(location.href.split('?')[0]);
-  location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=public_repo&state=${state}&redirect_uri=${redirect}`;
+  // Use top-level window so GitHub OAuth doesn't happen inside an iframe
+  const targetWindow = window.top || window;
+  const pageUrl = targetWindow.location.href.split('?')[0];
+  // Make sure callback URL points to /report.html directly
+  const callbackBase = pageUrl.includes('report') ? pageUrl : pageUrl.replace(/\/?$/, '/report.html');
+  const redirect = encodeURIComponent(callbackBase);
+  targetWindow.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=public_repo&state=${state}&redirect_uri=${redirect}`;
 }
 
 async function exchangeCode(code) {
