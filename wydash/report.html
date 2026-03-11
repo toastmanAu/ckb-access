@@ -235,7 +235,7 @@
 // OAuth flow requires a small backend to swap code→token (can't do client-side).
 // If OAUTH_WORKER_URL is set, use full OAuth flow.
 // If not set, fall back to GitHub's new-issue URL (Option A — no sign-in needed).
-const OAUTH_WORKER_URL = ''; // e.g. 'https://wydash-oauth.yourname.workers.dev'
+const OAUTH_WORKER_URL = 'https://wydash-oauth.toastman-one.workers.dev';
 
 const REPO_META = {
   'nervosnetwork/fiber':        { desc: 'Core Fiber Network payment channel node', issues: 'https://github.com/nervosnetwork/fiber/issues' },
@@ -314,7 +314,7 @@ function startOAuth() {
   }
   const state = Math.random().toString(36).slice(2);
   sessionStorage.setItem('oauth_state', state);
-  const clientId = OAUTH_WORKER_URL ? 'YOUR_CLIENT_ID' : '';
+  const clientId = 'Ov23litGWdXhs1WCL90G';
   const redirect = encodeURIComponent(location.href.split('?')[0]);
   location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=public_repo&state=${state}&redirect_uri=${redirect}`;
 }
