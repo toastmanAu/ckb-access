@@ -20,27 +20,32 @@ ask() { local var="$1" prompt="$2" default="$3"; read -rp "  ${prompt} [${defaul
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
+# Archive format: .tar.gz on Linux, .zip on macOS
+ARCHIVE_EXT=""
+
 case "$OS" in
   Linux)
     case "$ARCH" in
-      x86_64)  TARBALL="ckb-cli_v${VERSION}_x86_64-unknown-linux-gnu.tar.gz" ;;
-      aarch64) TARBALL="ckb-cli_v${VERSION}_aarch64-unknown-linux-gnu.tar.gz" ;;
+      x86_64)  ARCHIVE="ckb-cli_v${VERSION}_x86_64-unknown-linux-gnu.tar.gz" ;;
+      aarch64) ARCHIVE="ckb-cli_v${VERSION}_aarch64-unknown-linux-gnu.tar.gz" ;;
       *)       echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
+    ARCHIVE_EXT="tar.gz"
     IS_LINUX=1; IS_MAC=0
     ;;
   Darwin)
     case "$ARCH" in
-      x86_64) TARBALL="ckb-cli_v${VERSION}_x86_64-apple-darwin.tar.gz" ;;
-      arm64)  TARBALL="ckb-cli_v${VERSION}_aarch64-apple-darwin.tar.gz" ;;
+      x86_64) ARCHIVE="ckb-cli_v${VERSION}_x86_64-apple-darwin.zip" ;;
+      arm64)  ARCHIVE="ckb-cli_v${VERSION}_aarch64-apple-darwin.zip" ;;
       *)      echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
+    ARCHIVE_EXT="zip"
     IS_LINUX=0; IS_MAC=1
     ;;
   *) echo "Unsupported OS: $OS"; exit 1 ;;
 esac
 
-TARBALL_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
+ARCHIVE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ARCHIVE}"
 
 # ── Banner ────────────────────────────────────────────────
 echo -e "${BOLD}"
@@ -55,8 +60,8 @@ echo ""
 
 # ── Config ────────────────────────────────────────────────
 write_step "Configuration"
-INSTALL_DIR="$HOME/.ckb-cli/bin"
-ask INSTALL_DIR "Install directory" "$INSTALL_DIR"
+DEFAULT_INSTALL="$HOME/.ckb-cli/bin"
+ask INSTALL_DIR "Install directory" "$DEFAULT_INSTALL"
 
 echo ""
 write_ok "Install dir: $INSTALL_DIR"
@@ -70,17 +75,23 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 if command -v curl &>/dev/null; then
-  curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  curl -fsSL -o "${TMP_DIR}/${ARCHIVE}" "$ARCHIVE_URL"
 elif command -v wget &>/dev/null; then
-  wget -q -O "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  wget -q -O "${TMP_DIR}/${ARCHIVE}" "$ARCHIVE_URL"
 else
   write_error "curl or wget required"; exit 1
 fi
 
-tar -xzf "${TMP_DIR}/${TARBALL}" -C "$TMP_DIR"
+if [ "$ARCHIVE_EXT" = "tar.gz" ]; then
+  tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "$TMP_DIR"
+else
+  # macOS .zip
+  unzip -q "${TMP_DIR}/${ARCHIVE}" -d "$TMP_DIR"
+fi
+
 BIN_PATH="$(find "$TMP_DIR" -name "ckb-cli" -type f | head -1)"
 if [ -z "$BIN_PATH" ]; then
-  write_error "ckb-cli binary not found in tarball"; exit 1
+  write_error "ckb-cli binary not found in archive"; exit 1
 fi
 cp "$BIN_PATH" "${INSTALL_DIR}/${BINARY}"
 chmod +x "${INSTALL_DIR}/${BINARY}"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# ckb-light-client installer — Linux & macOS
+# ckb-light installer — Linux & macOS
 # One command: curl -fsSL https://raw.githubusercontent.com/toastmanAu/ckb-access/main/ckb-light/install.sh | bash
 set -euo pipefail
 
 VERSION="0.5.4"
-BINARY="ckb-light-client"
+BINARY="ckb-light"
 SERVICE_NAME="ckb-light"
 REPO="nervosnetwork/ckb-light-client"
 CONFIG_BASE="https://raw.githubusercontent.com/nervosnetwork/ckb-light-client/main/config"
@@ -15,6 +15,7 @@ write_step()  { echo -e "\n${BOLD}${CYAN}▶ $*${RESET}"; }
 write_ok()    { echo -e "  ${GREEN}✓${RESET} $*"; }
 write_warn()  { echo -e "  ${YELLOW}⚠${RESET}  $*"; }
 write_error() { echo -e "  ${RED}✗${RESET} $*"; }
+write_info()  { echo -e "  ${CYAN}ℹ${RESET} $*"; }
 ask() { local var="$1" prompt="$2" default="$3"; read -rp "  ${prompt} [${default}]: " val; eval "$var=\"${val:-$default}\""; }
 
 # ── Platform detect ───────────────────────────────────────
@@ -80,8 +81,8 @@ echo ""
 write_step "Configuration"
 ask NETWORK      "Network (mainnet/testnet)" "mainnet"
 ask INSTALL_DIR  "Install directory" "$HOME/.ckb-light-${NETWORK}"
-ask P2P_PORT     "P2P listen port" "8118"
-ask RPC_PORT     "RPC listen port" "9000"
+ask P2P_PORT     "P2P listen port" "8117"
+ask RPC_PORT     "RPC listen port" "8116"
 ask MAX_PEERS    "Max peers" "125"
 
 DATA_DIR="${INSTALL_DIR}/data"
@@ -96,7 +97,7 @@ write_ok "RPC port:    $RPC_PORT"
 echo ""
 
 # ── Download / Build ──────────────────────────────────────
-write_step "Getting ckb-light-client v${VERSION}"
+write_step "Getting ckb-light v${VERSION}"
 mkdir -p "${INSTALL_DIR}/bin" "${DATA_DIR}/store" "${DATA_DIR}/network"
 
 if [ "$BUILD_FROM_SOURCE" = "1" ]; then
@@ -159,6 +160,7 @@ if [ "$BUILD_FROM_SOURCE" = "1" ]; then
   write_info "Compiling — grab a coffee, this takes 20-30 min on arm64..."
   cd "$TMP_SRC"
   cargo build --release --bin ckb-light-client 2>&1 | grep -E "Compiling|Finished|error" | tail -10
+  # Rename binary from ckb-light-client to ckb-light
   cp "target/release/ckb-light-client" "${INSTALL_DIR}/bin/${BINARY}"
   cd - >/dev/null
   rm -rf "$TMP_SRC"
@@ -324,11 +326,9 @@ fi
 
 # ── Smoke test ────────────────────────────────────────────
 write_step "Smoke Test"
-write_info() { echo -e "  ${CYAN}ℹ${RESET} $*"; }
 write_info "Starting light client briefly to verify it launches..."
 
-# Kill any existing process
-pkill -f "ckb-light-client" 2>/dev/null || true
+pkill -f "ckb-light" 2>/dev/null || true
 sleep 1
 
 RUST_LOG=info,ckb_light_client=info \
@@ -353,7 +353,7 @@ done
 echo ""
 
 kill "$SMOKE_PID" 2>/dev/null || true
-pkill -f "ckb-light-client" 2>/dev/null || true
+pkill -f "ckb-light" 2>/dev/null || true
 sleep 1
 
 if [ "$SMOKE_PASS" = "1" ]; then
@@ -385,7 +385,7 @@ echo ""
 
 # ── Offer to start ────────────────────────────────────────
 write_step "Start Node?"
-read -rp "  Start ckb-light-client now? [Y/n]: " START_NOW
+read -rp "  Start ckb-light now? [Y/n]: " START_NOW
 START_NOW="${START_NOW:-Y}"
 if [[ "$START_NOW" =~ ^[Yy] ]]; then
   if [ "$IS_LINUX" = "1" ] && command -v systemctl &>/dev/null; then

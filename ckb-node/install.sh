@@ -21,27 +21,33 @@ ask() { local var="$1" prompt="$2" default="$3"; read -rp "  ${prompt} [${defaul
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
+# Archive format: .tar.gz on Linux, .zip on macOS
+ARCHIVE_EXT=""
+ARCHIVE_CMD=""
+
 case "$OS" in
   Linux)
     case "$ARCH" in
-      x86_64)  TARBALL="ckb_v${VERSION}_x86_64-unknown-linux-gnu.tar.gz" ;;
-      aarch64) TARBALL="ckb_v${VERSION}_aarch64-unknown-linux-gnu.tar.gz" ;;
+      x86_64)  ARCHIVE="ckb_v${VERSION}_x86_64-unknown-linux-gnu.tar.gz" ;;
+      aarch64) ARCHIVE="ckb_v${VERSION}_aarch64-unknown-linux-gnu.tar.gz" ;;
       *)       echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
+    ARCHIVE_EXT="tar.gz"
     IS_LINUX=1; IS_MAC=0
     ;;
   Darwin)
     case "$ARCH" in
-      x86_64) TARBALL="ckb_v${VERSION}_x86_64-apple-darwin.tar.gz" ;;
-      arm64)  TARBALL="ckb_v${VERSION}_aarch64-apple-darwin.tar.gz" ;;
+      x86_64) ARCHIVE="ckb_v${VERSION}_x86_64-apple-darwin.zip" ;;
+      arm64)  ARCHIVE="ckb_v${VERSION}_aarch64-apple-darwin.zip" ;;
       *)      echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
+    ARCHIVE_EXT="zip"
     IS_LINUX=0; IS_MAC=1
     ;;
   *) echo "Unsupported OS: $OS"; exit 1 ;;
 esac
 
-TARBALL_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
+ARCHIVE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${ARCHIVE}"
 
 # ── Banner ────────────────────────────────────────────────
 echo -e "${BOLD}"
@@ -62,7 +68,6 @@ ask INSTALL_DIR  "Install directory" "$HOME/.ckb-node"
 ask RPC_PORT     "RPC listen port"   "8114"
 ask P2P_PORT     "P2P listen port"   "8115"
 
-DATA_DIR="${INSTALL_DIR}"
 LOG_FILE="${INSTALL_DIR}/ckb-node.log"
 
 echo ""
@@ -79,17 +84,23 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 if command -v curl &>/dev/null; then
-  curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  curl -fsSL -o "${TMP_DIR}/${ARCHIVE}" "$ARCHIVE_URL"
 elif command -v wget &>/dev/null; then
-  wget -q -O "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  wget -q -O "${TMP_DIR}/${ARCHIVE}" "$ARCHIVE_URL"
 else
   write_error "curl or wget required"; exit 1
 fi
 
-tar -xzf "${TMP_DIR}/${TARBALL}" -C "$TMP_DIR"
+if [ "$ARCHIVE_EXT" = "tar.gz" ]; then
+  tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "$TMP_DIR"
+else
+  # macOS .zip
+  unzip -q "${TMP_DIR}/${ARCHIVE}" -d "$TMP_DIR"
+fi
+
 BIN_PATH="$(find "$TMP_DIR" -name "ckb" -type f | head -1)"
 if [ -z "$BIN_PATH" ]; then
-  write_error "ckb binary not found in tarball"; exit 1
+  write_error "ckb binary not found in archive"; exit 1
 fi
 cp "$BIN_PATH" "${INSTALL_DIR}/bin/${BINARY}"
 chmod +x "${INSTALL_DIR}/bin/${BINARY}"
@@ -106,20 +117,16 @@ fi
 
 # Patch RPC port if non-default
 if [ "$RPC_PORT" != "8114" ]; then
-  if command -v sed &>/dev/null; then
-    sed -i.bak "s|listen_address = \"127.0.0.1:8114\"|listen_address = \"127.0.0.1:${RPC_PORT}\"|g" \
-      "${INSTALL_DIR}/ckb.toml" 2>/dev/null || true
-    write_ok "RPC port patched to $RPC_PORT"
-  fi
+  sed -i.bak "s|listen_address = \"127\.0\.0\.1:8114\"|listen_address = \"127.0.0.1:${RPC_PORT}\"|g" \
+    "${INSTALL_DIR}/ckb.toml" 2>/dev/null || true
+  write_ok "RPC port patched to $RPC_PORT"
 fi
 
 # Patch P2P port if non-default
 if [ "$P2P_PORT" != "8115" ]; then
-  if command -v sed &>/dev/null; then
-    sed -i.bak "s|listen_addresses = \[\"/ip4/0.0.0.0/tcp/8115\"|listen_addresses = [\"/ip4/0.0.0.0/tcp/${P2P_PORT}\"|g" \
-      "${INSTALL_DIR}/ckb.toml" 2>/dev/null || true
-    write_ok "P2P port patched to $P2P_PORT"
-  fi
+  sed -i.bak "s|/tcp/8115\"|/tcp/${P2P_PORT}\"|g" \
+    "${INSTALL_DIR}/ckb.toml" 2>/dev/null || true
+  write_ok "P2P port patched to $P2P_PORT"
 fi
 
 # ── Start script ──────────────────────────────────────────
@@ -135,6 +142,7 @@ chmod +x "$START_SCRIPT"
 write_ok "Start script: $START_SCRIPT"
 
 # ── PATH ──────────────────────────────────────────────────
+write_step "PATH"
 BIN_DIR="${INSTALL_DIR}/bin"
 if ! echo "$PATH" | grep -q "$BIN_DIR"; then
   SHELL_RC="$HOME/.bashrc"
@@ -223,7 +231,7 @@ fi
 write_step "Smoke Test"
 write_info "Starting node briefly to verify it launches..."
 
-pkill -f "${BINARY}" 2>/dev/null || true
+pkill -f "ckb run" 2>/dev/null || true
 sleep 1
 
 RUST_LOG=info \
@@ -248,7 +256,7 @@ done
 echo ""
 
 kill "$SMOKE_PID" 2>/dev/null || true
-pkill -f "${BINARY}" 2>/dev/null || true
+pkill -f "ckb run" 2>/dev/null || true
 sleep 1
 
 if [ "$SMOKE_PASS" = "1" ]; then
