@@ -120,11 +120,17 @@ class DashHandler(http.server.SimpleHTTPRequestHandler):
             })
             return
 
-        # Static files — no-cache for HTML
-        if self.path.endswith('.html') or self.path in ('/', ''):
-            path = self.translate_path(self.path)
-            if os.path.isdir(path):
-                path = os.path.join(path, 'index.html')
+        # Static files — extensionless routes: /fiber → fiber.html, /mining → mining.html etc.
+        candidate = self.path.split('?')[0]  # strip query string
+        if candidate in ('/', ''):
+            candidate = '/index.html'
+        path = self.translate_path(candidate)
+        if os.path.isdir(path):
+            path = os.path.join(path, 'index.html')
+        # Try appending .html for extensionless routes
+        if not os.path.exists(path) and '.' not in os.path.basename(candidate):
+            path = path + '.html'
+        if path.endswith('.html') and os.path.exists(path):
             try:
                 with open(path, 'rb') as f:
                     data = f.read()

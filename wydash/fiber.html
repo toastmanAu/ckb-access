@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiber — WyDash</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #0d0f14; }
+  #fiber-frame {
+    width: 100%; height: 100%;
+    border: none;
+    display: block;
+  }
+  #error-msg {
+    display: none;
+    color: #8b949e;
+    font-family: monospace;
+    font-size: 14px;
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+  #error-msg h2 { color: #e2e8f0; margin-bottom: 1rem; font-size: 18px; }
+  #error-msg a { color: #3bc67a; }
+</style>
+</head>
+<body>
+<iframe id="fiber-frame" src="" title="Fiber Node Dashboard"></iframe>
+<div id="error-msg">
+  <h2>⚡ Fiber Dashboard Unreachable</h2>
+  <p>Could not connect to the Fiber dashboard.<br>
+  Make sure <code>fiber-dash.service</code> is running.</p>
+  <p style="margin-top:1rem">
+    <a href="http://192.168.68.98:8229" target="_blank">Try opening directly →</a>
+  </p>
+</div>
+<script>
+  // Read fiber dash_url from WyDash config API, fall back to :8229
+  fetch('/api/config')
+    .then(r => r.json())
+    .then(cfg => {
+      const fiberSection = cfg.sections && cfg.sections.fiber;
+      // dash_url in conf, or derive from rpc_url port offset, or default
+      let url = (fiberSection && fiberSection.dash_url) || null;
+      if (!url) {
+        // fnn RPC is typically :8227, dash is :8229 (RPC port + 2)
+        const rpc = (fiberSection && fiberSection.rpc_url) || 'http://127.0.0.1:8227';
+        const rpcPort = parseInt(rpc.split(':').pop()) || 8227;
+        url = rpc.replace(/:[\d]+$/, ':' + (rpcPort + 2));
+      }
+      // Rewrite 127.0.0.1 → current hostname so browser can reach it
+      url = url.replace('127.0.0.1', location.hostname);
+      document.getElementById('fiber-frame').src = url;
+    })
+    .catch(() => {
+      // Fallback: just use hostname:8229
+      document.getElementById('fiber-frame').src =
+        'http://' + location.hostname + ':8229';
+    });
+
+  document.getElementById('fiber-frame').onerror = function() {
+    this.style.display = 'none';
+    document.getElementById('error-msg').style.display = 'block';
+  };
+</script>
+</body>
+</html>
