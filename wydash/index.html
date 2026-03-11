@@ -374,6 +374,8 @@ function buildResourceGrid() {
   totalEl.textContent = '~' + totalRam + ' MB RAM total';
   totalRow.style.display = 'flex';
 }
+
+function buildQuickGrid() {
   const grid = document.getElementById('quickGrid');
   grid.innerHTML = '';
   Object.entries(MODULE_DEF).forEach(([key, mod]) => {
