@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report an Issue — WyDash</title>
+<style>
+  :root {
+    --bg: #0d0f14; --surface: #161a22; --border: #252b38;
+    --accent: #3bc67a; --accent2: #4a9eff; --warn: #f5a623;
+    --danger: #e74c3c; --text: #e2e8f0; --muted: #64748b;
+    --card: #1a202e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header {
+    padding: 2rem 2rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; }
+  header p { color: var(--muted); margin-top: .3rem; font-size: .9rem; }
+
+  .container { max-width: 680px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Auth banner */
+  #auth-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+  #auth-section h2 { font-size: 1rem; margin-bottom: .5rem; }
+  #auth-section p { color: var(--muted); font-size: .85rem; margin-bottom: 1.25rem; }
+  .gh-btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    background: #238636; color: #fff; border: none; border-radius: 8px;
+    padding: .65rem 1.25rem; font-size: .9rem; font-weight: 600;
+    cursor: pointer; text-decoration: none; transition: opacity .15s;
+  }
+  .gh-btn:hover { opacity: .85; }
+  .gh-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+  /* User bar */
+  #user-bar {
+    display: none;
+    align-items: center; gap: .75rem;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: .75rem 1rem;
+    margin-bottom: 1.5rem; font-size: .85rem;
+  }
+  #user-bar img { width: 28px; height: 28px; border-radius: 50%; }
+  #user-bar .name { flex: 1; font-weight: 600; }
+  #user-bar button {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: .3rem .75rem; font-size: .8rem; cursor: pointer;
+  }
+  #user-bar button:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* Form */
+  #issue-form { display: none; }
+  .field { margin-bottom: 1.25rem; }
+  label { display: block; font-size: .8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--muted); margin-bottom: .4rem; }
+  select, input[type=text], textarea {
+    width: 100%; background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: .9rem;
+    padding: .65rem .85rem; outline: none; transition: border-color .15s;
+    font-family: inherit;
+  }
+  select:focus, input[type=text]:focus, textarea:focus { border-color: var(--accent2); }
+  textarea { resize: vertical; min-height: 200px; line-height: 1.55; }
+
+  .repo-meta { font-size: .78rem; color: var(--muted); margin-top: .35rem; }
+  .repo-meta a { color: var(--accent2); text-decoration: none; }
+
+  /* Label chips */
+  .label-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+  .label-chip {
+    padding: .25rem .65rem; border-radius: 20px; font-size: .75rem; font-weight: 600;
+    cursor: pointer; border: 2px solid transparent; transition: all .15s; user-select: none;
+  }
+  .label-chip.selected { border-color: #fff; }
+
+  /* Severity */
+  .severity-row { display: flex; gap: .5rem; }
+  .sev-btn {
+    flex: 1; padding: .5rem; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); font-size: .82rem; font-weight: 600;
+    cursor: pointer; text-align: center; transition: all .15s;
+  }
+  .sev-btn.selected { color: #fff; }
+  .sev-btn[data-sev="low"].selected { background: #1a3a2a; border-color: var(--accent); color: var(--accent); }
+  .sev-btn[data-sev="medium"].selected { background: #3a2a0a; border-color: var(--warn); color: var(--warn); }
+  .sev-btn[data-sev="high"].selected { background: #3a0a0a; border-color: var(--danger); color: var(--danger); }
+
+  /* Submit */
+  .submit-row { display: flex; gap: .75rem; align-items: center; margin-top: 1.5rem; }
+  #submit-btn {
+    background: var(--accent); color: #000; border: none; border-radius: 8px;
+    padding: .7rem 1.5rem; font-size: .95rem; font-weight: 700;
+    cursor: pointer; transition: opacity .15s;
+  }
+  #submit-btn:hover { opacity: .85; }
+  #submit-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .preview-link { font-size: .82rem; color: var(--accent2); cursor: pointer; text-decoration: underline; }
+
+  /* Result */
+  #result {
+    display: none; background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 1.5rem;
+  }
+  #result.ok { border-color: var(--accent); }
+  #result.err { border-color: var(--danger); }
+  #result h3 { font-size: 1rem; margin-bottom: .5rem; }
+  #result a { color: var(--accent2); }
+  #result p { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+
+  /* Template hint */
+  .template-hint {
+    background: #1a202e; border: 1px solid var(--border); border-radius: 8px;
+    padding: .75rem 1rem; font-size: .8rem; color: var(--muted);
+    margin-bottom: 1.25rem; line-height: 1.5;
+  }
+  .template-hint strong { color: var(--text); }
+
+  @media (max-width: 500px) {
+    header { padding: 1.25rem 1rem .75rem; }
+    .container { padding: 1.25rem 1rem; }
+    .severity-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🐛 Found a problem with the core infrastructure?</h1>
+  <p>Report issues directly to the upstream Nervos repositories — posted under your own GitHub account.</p>
+</header>
+
+<div class="container">
+
+  <!-- GitHub auth -->
+  <div id="auth-section">
+    <h2>Sign in with GitHub to post an issue</h2>
+    <p>Your issue will appear under your own GitHub profile.<br>WyDash only requests the <code>public_repo</code> scope.</p>
+    <button class="gh-btn" onclick="startOAuth()">
+      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      Sign in with GitHub
+    </button>
+  </div>
+
+  <!-- Signed-in user bar -->
+  <div id="user-bar">
+    <img id="user-avatar" src="" alt="">
+    <span class="name" id="user-name"></span>
+    <button onclick="signOut()">Sign out</button>
+  </div>
+
+  <!-- Issue form -->
+  <form id="issue-form" onsubmit="submitIssue(event)">
+
+    <div class="field">
+      <label>Repository</label>
+      <select id="repo-select" onchange="updateRepoMeta()">
+        <optgroup label="Fiber Network">
+          <option value="nervosnetwork/fiber">nervosnetwork/fiber — Fiber Network Node (fnn)</option>
+          <option value="nervosnetwork/fiber-scripts">nervosnetwork/fiber-scripts — Fiber on-chain scripts</option>
+        </optgroup>
+        <optgroup label="CKB Core">
+          <option value="nervosnetwork/ckb">nervosnetwork/ckb — CKB Full Node</option>
+          <option value="nervosnetwork/ckb-light-client">nervosnetwork/ckb-light-client — CKB Light Client</option>
+          <option value="nervosnetwork/ckb-cli">nervosnetwork/ckb-cli — CKB CLI</option>
+        </optgroup>
+        <optgroup label="Spore / DOB">
+          <option value="sporeprotocol/spore-sdk">sporeprotocol/spore-sdk — Spore SDK</option>
+          <option value="ckb-devrel/ccc">ckb-devrel/ccc — CCC wallet connector</option>
+        </optgroup>
+        <optgroup label="Wyltek Tools">
+          <option value="toastmanAu/ckb-access">toastmanAu/ckb-access — CKB Access installer suite</option>
+          <option value="toastmanAu/fiber-rpc-js">toastmanAu/fiber-rpc-js — Fiber RPC JS client</option>
+        </optgroup>
+      </select>
+      <div class="repo-meta" id="repo-meta"></div>
+    </div>
+
+    <div class="field">
+      <label>Severity</label>
+      <div class="severity-row">
+        <button type="button" class="sev-btn" data-sev="low" onclick="setSev(this)">🟢 Low</button>
+        <button type="button" class="sev-btn selected" data-sev="medium" onclick="setSev(this)">🟡 Medium</button>
+        <button type="button" class="sev-btn" data-sev="high" onclick="setSev(this)">🔴 High / Crash</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Issue Title</label>
+      <input type="text" id="issue-title" placeholder="Brief description of the problem" required maxlength="200">
+    </div>
+
+    <div class="template-hint">
+      <strong>Tip:</strong> Good bug reports include: what you did, what you expected, what actually happened, and any error messages or logs. The template below has prompts — fill in what's relevant and delete the rest.
+    </div>
+
+    <div class="field">
+      <label>Description (Markdown)</label>
+      <textarea id="issue-body" required></textarea>
+    </div>
+
+    <div class="field">
+      <label>Labels <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></label>
+      <div class="label-row" id="label-row"></div>
+    </div>
+
+    <div class="field">
+      <label>WyDash context <span style="color:var(--muted);font-weight:400;text-transform:none">(auto-appended)</span></label>
+      <div id="context-preview" style="font-size:.78rem;color:var(--muted);font-family:monospace;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:.6rem .85rem;line-height:1.5;"></div>
+    </div>
+
+    <div class="submit-row">
+      <button type="submit" id="submit-btn">Post Issue →</button>
+      <span class="preview-link" onclick="previewOnGitHub()">Preview on GitHub first</span>
+    </div>
+  </form>
+
+  <div id="result"></div>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+// OAuth flow requires a small backend to swap code→token (can't do client-side).
+// If OAUTH_WORKER_URL is set, use full OAuth flow.
+// If not set, fall back to GitHub's new-issue URL (Option A — no sign-in needed).
+const OAUTH_WORKER_URL = ''; // e.g. 'https://wydash-oauth.yourname.workers.dev'
+
+const REPO_META = {
+  'nervosnetwork/fiber':        { desc: 'Core Fiber Network payment channel node', issues: 'https://github.com/nervosnetwork/fiber/issues' },
+  'nervosnetwork/fiber-scripts':{ desc: 'On-chain Fiber scripts (CKB type/lock scripts)', issues: 'https://github.com/nervosnetwork/fiber-scripts/issues' },
+  'nervosnetwork/ckb':          { desc: 'CKB full node (Rust)', issues: 'https://github.com/nervosnetwork/ckb/issues' },
+  'nervosnetwork/ckb-light-client': { desc: 'CKB light client', issues: 'https://github.com/nervosnetwork/ckb-light-client/issues' },
+  'nervosnetwork/ckb-cli':      { desc: 'CKB command-line wallet/tool', issues: 'https://github.com/nervosnetwork/ckb-cli/issues' },
+  'sporeprotocol/spore-sdk':    { desc: 'Spore SDK for DOB/NFT minting', issues: 'https://github.com/sporeprotocol/spore-sdk/issues' },
+  'ckb-devrel/ccc':             { desc: 'CCC multi-wallet connector for CKB dApps', issues: 'https://github.com/ckb-devrel/ccc/issues' },
+  'toastmanAu/ckb-access':      { desc: 'WyDash + ckb-access installer suite', issues: 'https://github.com/toastmanAu/ckb-access/issues' },
+  'toastmanAu/fiber-rpc-js':    { desc: 'Fiber RPC JavaScript client library', issues: 'https://github.com/toastmanAu/fiber-rpc-js/issues' },
+};
+
+const LABEL_PRESETS = {
+  'nervosnetwork/fiber': [
+    { name: 'bug', color: '#d73a4a' },
+    { name: 'rpc', color: '#0075ca' },
+    { name: 'channel', color: '#e4e669' },
+    { name: 'documentation', color: '#0075ca' },
+  ],
+  default: [
+    { name: 'bug', color: '#d73a4a' },
+    { name: 'documentation', color: '#0075ca' },
+    { name: 'question', color: '#d876e3' },
+    { name: 'enhancement', color: '#a2eeef' },
+  ]
+};
+
+const BODY_TEMPLATE = `## What happened
+<!-- Describe the bug clearly -->
+
+## Steps to reproduce
+1. 
+2. 
+
+## Expected behaviour
+<!-- What did you expect to happen? -->
+
+## Actual behaviour
+<!-- What actually happened? Paste error messages, RPC responses, logs -->
+
+## Environment
+<!-- WyDash fills this in automatically below -->
+`;
+
+// ── State ─────────────────────────────────────────────────────────────────
+let ghToken = localStorage.getItem('gh_token') || '';
+let ghUser  = JSON.parse(localStorage.getItem('gh_user') || 'null');
+let selectedLabels = new Set();
+let severity = 'medium';
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // Handle OAuth callback
+  const params = new URLSearchParams(location.search);
+  if (params.get('code') && OAUTH_WORKER_URL) {
+    exchangeCode(params.get('code'));
+    return;
+  }
+
+  updateRepoMeta();
+  document.getElementById('issue-body').value = BODY_TEMPLATE;
+  buildContextPreview();
+
+  if (ghToken && ghUser) {
+    showForm();
+  }
+});
+
+// ── OAuth ─────────────────────────────────────────────────────────────────
+function startOAuth() {
+  if (!OAUTH_WORKER_URL) {
+    // No OAuth worker — use GitHub's new issue URL with pre-filled content
+    openGitHubDirect();
+    return;
+  }
+  const state = Math.random().toString(36).slice(2);
+  sessionStorage.setItem('oauth_state', state);
+  const clientId = OAUTH_WORKER_URL ? 'YOUR_CLIENT_ID' : '';
+  const redirect = encodeURIComponent(location.href.split('?')[0]);
+  location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=public_repo&state=${state}&redirect_uri=${redirect}`;
+}
+
+async function exchangeCode(code) {
+  try {
+    const r = await fetch(`${OAUTH_WORKER_URL}/token?code=${code}`);
+    const d = await r.json();
+    if (!d.access_token) throw new Error('No token');
+    ghToken = d.access_token;
+    localStorage.setItem('gh_token', ghToken);
+
+    const userRes = await fetch('https://api.github.com/user', {
+      headers: { Authorization: `token ${ghToken}` }
+    });
+    ghUser = await userRes.json();
+    localStorage.setItem('gh_user', JSON.stringify(ghUser));
+
+    history.replaceState({}, '', location.pathname);
+    updateRepoMeta();
+    document.getElementById('issue-body').value = BODY_TEMPLATE;
+    buildContextPreview();
+    showForm();
+  } catch(e) {
+    alert('GitHub sign-in failed: ' + e.message);
+  }
+}
+
+function signOut() {
+  ghToken = ''; ghUser = null;
+  localStorage.removeItem('gh_token');
+  localStorage.removeItem('gh_user');
+  document.getElementById('user-bar').style.display = 'none';
+  document.getElementById('issue-form').style.display = 'none';
+  document.getElementById('auth-section').style.display = 'block';
+  document.getElementById('result').style.display = 'none';
+}
+
+function showForm() {
+  document.getElementById('auth-section').style.display = 'none';
+  const bar = document.getElementById('user-bar');
+  bar.style.display = 'flex';
+  document.getElementById('user-avatar').src = ghUser.avatar_url;
+  document.getElementById('user-name').textContent = ghUser.login;
+  document.getElementById('issue-form').style.display = 'block';
+  updateLabelChips();
+}
+
+// ── Repo / label helpers ───────────────────────────────────────────────────
+function updateRepoMeta() {
+  const repo = document.getElementById('repo-select').value;
+  const meta = REPO_META[repo] || {};
+  document.getElementById('repo-meta').innerHTML =
+    `${meta.desc || ''} · <a href="${meta.issues || '#'}" target="_blank">existing issues ↗</a>`;
+  updateLabelChips();
+}
+
+function updateLabelChips() {
+  const repo = document.getElementById('repo-select').value;
+  const labels = LABEL_PRESETS[repo] || LABEL_PRESETS.default;
+  selectedLabels.clear();
+  // Auto-select 'bug'
+  selectedLabels.add('bug');
+  const row = document.getElementById('label-row');
+  if (!row) return;
+  row.innerHTML = labels.map(l => `
+    <span class="label-chip ${selectedLabels.has(l.name) ? 'selected' : ''}"
+          style="background:${l.color}22;color:${l.color};border-color:${selectedLabels.has(l.name) ? l.color : 'transparent'}"
+          data-name="${l.name}" data-color="${l.color}"
+          onclick="toggleLabel(this)">
+      ${l.name}
+    </span>`).join('');
+}
+
+function toggleLabel(el) {
+  const name = el.dataset.name, color = el.dataset.color;
+  if (selectedLabels.has(name)) {
+    selectedLabels.delete(name);
+    el.classList.remove('selected');
+    el.style.borderColor = 'transparent';
+  } else {
+    selectedLabels.add(name);
+    el.classList.add('selected');
+    el.style.borderColor = color;
+  }
+}
+
+function setSev(btn) {
+  document.querySelectorAll('.sev-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  severity = btn.dataset.sev;
+}
+
+// ── Context block ─────────────────────────────────────────────────────────
+async function buildContextPreview() {
+  let ctx = `**Reported via WyDash**\n`;
+  ctx += `- WyDash version: current\n`;
+  ctx += `- Browser: ${navigator.userAgent.split(' ').slice(-2).join(' ')}\n`;
+
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    const enabled = Object.entries(cfg.modules || {}).filter(([,v])=>v).map(([k])=>k);
+    ctx += `- Enabled modules: ${enabled.join(', ') || 'none'}\n`;
+  } catch {}
+
+  try {
+    const r = await fetch('/api/status');
+    const s = await r.json();
+    const states = Object.entries(s).map(([k,v])=>`${k}:${v?'ok':'down'}`).join(', ');
+    ctx += `- Service status: ${states}\n`;
+  } catch {}
+
+  document.getElementById('context-preview').textContent = ctx;
+  return ctx;
+}
+
+// ── Submit ─────────────────────────────────────────────────────────────────
+async function submitIssue(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Posting…';
+
+  const repo  = document.getElementById('repo-select').value;
+  const title = document.getElementById('issue-title').value.trim();
+  const bodyRaw = document.getElementById('issue-body').value.trim();
+  const ctx   = document.getElementById('context-preview').textContent;
+  const sevLabel = severity === 'high' ? '🔴 ' : severity === 'medium' ? '🟡 ' : '🟢 ';
+  const body  = bodyRaw + '\n\n---\n' + ctx;
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+      method: 'POST',
+      headers: {
+        Authorization: `token ${ghToken}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/vnd.github+json',
+      },
+      body: JSON.stringify({
+        title: sevLabel + title,
+        body,
+        labels: [...selectedLabels],
+      }),
+    });
+
+    const data = await res.json();
+    const resultEl = document.getElementById('result');
+    resultEl.style.display = 'block';
+
+    if (res.ok) {
+      resultEl.className = 'ok';
+      resultEl.innerHTML = `
+        <h3>✅ Issue posted!</h3>
+        <p><a href="${data.html_url}" target="_blank">${data.html_url}</a></p>
+        <p style="margin-top:.75rem">Thanks for reporting. The maintainers will be notified.</p>
+        <button onclick="resetForm()" style="margin-top:1rem;background:var(--accent);color:#000;border:none;border-radius:6px;padding:.5rem 1rem;font-weight:600;cursor:pointer">Report another</button>
+      `;
+      document.getElementById('issue-form').style.display = 'none';
+    } else {
+      resultEl.className = 'err';
+      resultEl.innerHTML = `<h3>❌ Failed to post</h3><p>${data.message || 'Unknown error'}</p>`;
+    }
+  } catch(err) {
+    const resultEl = document.getElementById('result');
+    resultEl.style.display = 'block';
+    resultEl.className = 'err';
+    resultEl.innerHTML = `<h3>❌ Network error</h3><p>${err.message}</p>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Post Issue →';
+}
+
+function resetForm() {
+  document.getElementById('issue-title').value = '';
+  document.getElementById('issue-body').value = BODY_TEMPLATE;
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('issue-form').style.display = 'block';
+  updateLabelChips();
+  buildContextPreview();
+}
+
+// ── Option A fallback: GitHub new-issue URL (no OAuth needed) ──────────────
+function openGitHubDirect() {
+  const repo  = document.getElementById('repo-select').value;
+  const title = document.getElementById('issue-title').value.trim() || '';
+  const body  = document.getElementById('issue-body').value.trim() + '\n\n---\n' + document.getElementById('context-preview').textContent;
+  const url = `https://github.com/${repo}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}&labels=${encodeURIComponent([...selectedLabels].join(','))}`;
+  window.open(url, '_blank');
+}
+
+function previewOnGitHub() {
+  // Always available — sends to GitHub pre-filled, user submits there
+  openGitHubDirect();
+}
+</script>
+</body>
+</html>
