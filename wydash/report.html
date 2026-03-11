@@ -289,16 +289,20 @@ let severity = 'medium';
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  // Handle OAuth callback
-  const params = new URLSearchParams(location.search);
-  if (params.get('code') && OAUTH_WORKER_URL) {
-    exchangeCode(params.get('code'));
-    return;
-  }
-
+  // Always init page first so it's never blank
   updateRepoMeta();
   document.getElementById('issue-body').value = BODY_TEMPLATE;
   buildContextPreview();
+
+  // Handle OAuth callback
+  const params = new URLSearchParams(location.search);
+  if (params.get('code') && OAUTH_WORKER_URL) {
+    // Show signing-in state
+    document.getElementById('auth-section').innerHTML =
+      '<h2>Signing in…</h2><p style="color:var(--muted);margin-top:.5rem">Exchanging GitHub token…</p>';
+    exchangeCode(params.get('code'));
+    return;
+  }
 
   if (ghToken && ghUser) {
     showForm();
@@ -339,7 +343,10 @@ async function exchangeCode(code) {
     buildContextPreview();
     showForm();
   } catch(e) {
-    alert('GitHub sign-in failed: ' + e.message);
+    document.getElementById('auth-section').innerHTML =
+      `<h2>❌ Sign-in failed</h2>
+       <p style="color:var(--danger);margin:.5rem 0">${e.message}</p>
+       <button class="gh-btn" onclick="location.href=location.pathname" style="margin-top:1rem">Try again</button>`;
   }
 }
 
