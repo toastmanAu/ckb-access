@@ -6,6 +6,17 @@
 # ============================================================
 set -euo pipefail
 
+# ── Detect legacy Fiber installs (v1.0 / v1.1) before anything else ───────
+detect_legacy_fiber() {
+  for svc in fiber fnn fiber-mainnet fiber-testnet; do
+    systemctl --user is-active --quiet "$svc" 2>/dev/null && echo "v1.1" && return
+  done
+  for bin in "$HOME/.fiber/bin/fnn" "$HOME/fiber/bin/fnn" "$HOME/.fiber-mainnet/bin/fnn"; do
+    [ -f "$bin" ] && echo "v1.0" && return
+  done
+  echo "none"
+}
+
 VERSION="v0.7.1"
 REPO="nervosnetwork/fiber"
 RELEASES="https://github.com/${REPO}/releases/download/${VERSION}"
@@ -918,6 +929,20 @@ main() {
   banner
   check_deps
   detect_platform
+
+  # ── Detect legacy installs (v1.0 / v1.1) ──────────────────────────────
+  LEGACY=$(detect_legacy_fiber 2>/dev/null || echo "none")
+  if [ "$LEGACY" != "none" ]; then
+    warn "Existing Fiber install detected (${LEGACY})"
+    info "Skipping binary install — checking for WyDash integration only."
+    # Source hook and offer module, then exit
+    HOOK_URL="https://raw.githubusercontent.com/toastmanAu/ckb-access/main/wydash/wydash-hook.sh"
+    if source <(curl -fsSL "$HOOK_URL" 2>/dev/null); then
+      offer_wydash_module "fiber"
+    fi
+    exit 0
+  fi
+
   collect_config
 
   if [ "$NETWORK" = "both" ]; then
@@ -929,6 +954,12 @@ main() {
     install_single "testnet"
   else
     install_single "$NETWORK"
+  fi
+
+  # ── WyDash integration (fresh installs) ───────────────────────────────
+  HOOK_URL="https://raw.githubusercontent.com/toastmanAu/ckb-access/main/wydash/wydash-hook.sh"
+  if source <(curl -fsSL "$HOOK_URL" 2>/dev/null); then
+    offer_wydash_module "fiber"
   fi
 }
 
