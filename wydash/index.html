@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WyDash — CKB Node Manager</title>
+  <style>
+    :root {
+      --bg: #07090d; --surface: #0e1117; --surface2: #141820;
+      --border: #1a2030; --accent: #00c8ff; --green: #00e5a0;
+      --red: #ff4560; --yellow: #fbbf24; --orange: #ff8c42;
+      --text: #e2e8f0; --muted: #4a5568;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; min-height: 100vh; }
+
+    /* ── Header ── */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 54px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .header-left { display: flex; align-items: center; gap: .75rem; }
+    .logo { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .logo span { color: var(--accent); }
+    .logo-badge { font-size: .65rem; background: rgba(0,200,255,.12); color: var(--accent); border: 1px solid rgba(0,200,255,.25); padding: 2px 7px; border-radius: 10px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700; }
+    .last-refresh { font-size: .72rem; color: var(--muted); }
+    .refresh-btn { background: none; border: 1px solid var(--border); color: var(--muted); padding: .3rem .7rem; border-radius: 6px; cursor: pointer; font-size: .78rem; transition: all .15s; }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Layout ── */
+    .layout { display: flex; height: calc(100vh - 54px); }
+
+    /* ── Sidebar ── */
+    nav { width: 195px; min-width: 195px; background: var(--surface); border-right: 1px solid var(--border); padding: 1rem 0; overflow-y: auto; flex-shrink: 0; }
+    .nav-section { margin-bottom: 1.5rem; }
+    .nav-label { font-size: .63rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .09em; padding: 0 1rem; margin-bottom: .4rem; }
+    .nav-item { display: flex; align-items: center; gap: .6rem; padding: .5rem 1rem; cursor: pointer; color: var(--muted); font-size: .85rem; border-left: 2px solid transparent; transition: all .15s; user-select: none; }
+    .nav-item:hover { color: var(--text); background: rgba(255,255,255,.03); }
+    .nav-item.active { color: var(--text); background: rgba(0,200,255,.06); border-left-color: var(--accent); }
+    .nav-item .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .nav-item.ok .dot { background: var(--green); }
+    .nav-item.warn .dot { background: var(--yellow); }
+    .nav-item.down .dot { background: var(--red); }
+    .nav-item .icon { font-size: .95rem; width: 18px; text-align: center; flex-shrink: 0; }
+
+    /* ── Main content ── */
+    main { flex: 1; overflow: hidden; position: relative; }
+
+    /* ── Frame view ── */
+    #frame-container { width: 100%; height: 100%; display: none; }
+    #frame-container.active { display: block; }
+    iframe { width: 100%; height: 100%; border: none; background: var(--bg); }
+
+    /* ── Home panel ── */
+    #home-panel { width: 100%; height: 100%; overflow-y: auto; padding: 2rem 1.5rem; display: block; }
+
+    .welcome { margin-bottom: 2rem; }
+    .welcome h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: .35rem; }
+    .welcome p { color: var(--muted); font-size: .85rem; line-height: 1.6; }
+
+    .section-title { font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: .75rem; margin-top: 1.75rem; }
+    .section-title:first-of-type { margin-top: 0; }
+
+    /* Status cards */
+    .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .75rem; }
+    .status-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; cursor: pointer; transition: border-color .15s; }
+    .status-card:hover { border-color: var(--accent); }
+    .status-card.ok   { border-left: 3px solid var(--green); }
+    .status-card.down { border-left: 3px solid var(--red); }
+    .status-card.warn { border-left: 3px solid var(--yellow); }
+    .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .35rem; }
+    .card-name { font-weight: 600; font-size: .85rem; }
+    .card-badge { font-size: .65rem; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; letter-spacing: .04em; }
+    .badge-ok   { background: rgba(0,229,160,.12);  color: var(--green); }
+    .badge-down { background: rgba(255,69,96,.12);   color: var(--red); }
+    .badge-warn { background: rgba(251,191,36,.12);  color: var(--yellow); }
+    .card-desc { font-size: .75rem; color: var(--muted); line-height: 1.5; }
+
+    /* Quick links */
+    .quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .5rem; }
+    .quick-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .65rem .85rem; cursor: pointer; font-size: .82rem; color: var(--muted); transition: all .15s; display: flex; align-items: center; gap: .5rem; }
+    .quick-btn:hover { border-color: var(--accent); color: var(--text); background: rgba(0,200,255,.04); }
+
+    /* Module resource cards */
+    .module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .75rem; }
+    .module-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .module-card.enabled { border-color: rgba(0,200,255,.3); }
+    .module-card.disabled { opacity: .55; }
+    .module-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+    .module-name { font-size: .9rem; font-weight: 600; }
+    .module-toggle { font-size: .65rem; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; letter-spacing: .05em; }
+    .toggle-on  { background: rgba(0,229,160,.12); color: var(--green); }
+    .toggle-off { background: rgba(255,255,255,.06); color: var(--muted); }
+    .module-desc { font-size: .78rem; color: var(--muted); line-height: 1.5; margin-bottom: .6rem; }
+    .res-row { display: flex; gap: .5rem; font-size: .75rem; padding: .18rem 0; border-top: 1px solid rgba(255,255,255,.04); }
+    .res-key { color: var(--muted); min-width: 46px; flex-shrink: 0; }
+    .res-val { color: var(--text); font-family: monospace; }
+    .res-val.hi { color: var(--yellow); }
+    .deps-list { font-size: .72rem; color: var(--muted); line-height: 1.65; padding-top: .3rem; }
+    .deps-list div::before { content: '› '; color: var(--accent); }
+    .base-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; }
+    .total-row { background: rgba(0,200,255,.06); border: 1px solid rgba(0,200,255,.18); border-radius: 8px; padding: .55rem .9rem; font-size: .82rem; display: flex; justify-content: space-between; align-items: center; margin-top: .75rem; }
+    .total-label { color: var(--muted); }
+    .total-val { font-weight: 700; color: var(--accent); font-family: monospace; }
+
+    @media(max-width: 600px) {
+      nav { width: 52px; min-width: 52px; }
+      .nav-label, .nav-item span.label { display: none; }
+      .nav-item { justify-content: center; padding: .6rem; }
+      .nav-item .dot { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo">⛓ <span>Wy</span>Dash</div>
+    <span class="logo-badge">CKB Tools</span>
+    <div class="last-refresh" id="lastRefresh">—</div>
+  </div>
+  <button class="refresh-btn" onclick="refreshStatus()">⟳ Refresh</button>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <nav id="sidebar">
+    <div class="nav-section">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" data-target="home" onclick="showPage('home', this)">
+        <span class="icon">🏠</span><span class="label">Home</span>
+      </div>
+    </div>
+    <!-- Module nav sections injected here by buildNav() -->
+  </nav>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- Home panel -->
+    <div id="home-panel">
+      <div class="welcome">
+        <h1>Welcome to WyDash ⛓</h1>
+        <p>Browser-based management for your CKB node, Fiber payment channels, and Spore/DOB tools.<br>
+        Everything runs locally — your keys never leave your machine.</p>
+      </div>
+
+      <div class="section-title" style="margin-top:0">Default Page</div>
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+        <span style="font-size:.8rem;color:var(--muted)">Opens to:</span>
+        <select id="defaultPageSelect" onchange="saveDefaultPage(this.value)"
+          style="background:var(--surface);border:1px solid var(--border);color:var(--text);
+                 padding:.35rem .7rem;border-radius:6px;font-size:.82rem;cursor:pointer;outline:none">
+          <option value="home">Home (this page)</option>
+        </select>
+        <span style="font-size:.75rem;color:var(--muted)">Saved in browser — takes effect on next load.</span>
+      </div>
+
+      <div class="section-title">Service Status</div>
+      <div class="status-grid" id="statusGrid">
+        <div class="status-card warn"><div class="card-top"><span class="card-name">Checking…</span></div></div>
+      </div>
+
+      <div class="section-title">Quick Access</div>
+      <div class="quick-grid" id="quickGrid">
+        <!-- Populated by buildQuickGrid() based on enabled modules -->
+      </div>
+
+      <div class="section-title" style="margin-top:1.75rem">Resource Draw</div>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
+        Each module runs its own daemon on the host. Enable only what you need.
+        WyDash itself is always <strong style="color:var(--text)">~18 MB RAM, &lt;0.1% CPU</strong>.
+      </p>
+      <div id="resourceGrid" class="module-grid"><!-- populated by buildResourceGrid() --></div>
+      <div class="total-row" id="totalRow" style="display:none">
+        <span class="total-label">Estimated total (WyDash + enabled modules)</span>
+        <span class="total-val" id="totalRam">—</span>
+      </div>
+    </div>
+
+    <!-- Frame container -->
+    <div id="frame-container">
+      <iframe id="mainFrame" src="" title="Tool View"></iframe>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── Module definitions ────────────────────────────────────────────────────────
+// ram_mb    = approximate resident memory added by enabling this module's daemon
+// cpu       = human description of CPU draw
+// poll_ms   = how often WyDash polls its health endpoint (ms)
+// deps      = what needs to be running on the host for this module to be useful
+const MODULE_DEF = {
+  ckb_node: {
+    label: 'CKB Node', icon: '⛓',
+    desc: 'Full node sync, peers, block height, indexer status.',
+    ram_mb: 800, cpu: '5–15% while syncing, <1% synced', poll_ms: 60000,
+    deps: ['ckb binary (v0.200+)', 'ckb.toml configured'],
+    nav: [
+      { label: 'Monitor',   url: '/node-monitor', icon: '⛓', key: 'ckb_node' },
+      { label: 'Configure', url: '/node-config',  icon: '⚙️' },
+    ]
+  },
+  mining: {
+    label: 'Mining', icon: '⛏',
+    desc: 'Stratum proxy, per-miner hashrate, solo block probability.',
+    ram_mb: 30, cpu: '<1% idle, brief spike per share', poll_ms: 60000,
+    deps: ['ckb-stratum-proxy', 'ckb node with Miner module enabled'],
+    nav: [
+      { label: 'Stats', url: '/mining', icon: '⛏', key: 'mining' },
+    ]
+  },
+  fiber: {
+    label: 'Fiber', icon: '⚡',
+    desc: 'Payment channels, balances, routing, peer graph.',
+    ram_mb: 120, cpu: '<1% idle', poll_ms: 60000,
+    deps: ['fnn binary (v0.7+)', 'funded CKB wallet', 'ckb node with Indexer module'],
+    nav: [
+      { label: 'Channels',  url: '/fiber',        icon: '⚡', key: 'fiber' },
+      { label: 'Configure', url: '/fiber-config', icon: '⚙️' },
+    ]
+  },
+  dob_minter: {
+    label: 'DOB Minter', icon: '🎨',
+    desc: 'Mint Spore / DOB NFTs. Requires a connected wallet.',
+    ram_mb: 60, cpu: '<1% idle', poll_ms: 60000,
+    deps: ['ckb-dob-minter service', 'JoyID or ckb-cli wallet'],
+    nav: [
+      { label: 'Mint', url: '/dob-minter', icon: '🎨', key: 'dob_minter' },
+    ]
+  },
+  dob_burner: {
+    label: 'DOB Burner', icon: '🔥',
+    desc: 'Reclaim CKB capacity locked in Spore/DOB cells.',
+    ram_mb: 0, cpu: 'none (browser-only tool)', poll_ms: null,
+    deps: ['ckb node RPC accessible'],
+    nav: [
+      { label: 'Burn', url: '/dob-burn', icon: '🔥' },
+    ]
+  },
+};
+
+// WyDash server itself: always present regardless of modules
+const BASE_COST = { ram_mb: 18, cpu: '<0.1% idle, ~100ms burst/60s', poll_ms: 60000 };
+
+let enabledModules = {};
+let statusCache = {};
+
+// ── Default page (localStorage) ───────────────────────────────────────────────
+const DEFAULT_PAGE_KEY = 'wydash_default_page';
+
+function saveDefaultPage(val) {
+  localStorage.setItem(DEFAULT_PAGE_KEY, val);
+}
+
+function getDefaultPage() {
+  return localStorage.getItem(DEFAULT_PAGE_KEY) || 'home';
+}
+
+function populateDefaultPageSelect() {
+  const sel = document.getElementById('defaultPageSelect');
+  if (!sel) return;
+  // Add enabled module nav items as options
+  Object.entries(MODULE_DEF).forEach(([key, mod]) => {
+    if (!enabledModules[key]) return;
+    mod.nav.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.url;
+      opt.textContent = mod.label + (mod.nav.length > 1 ? ' → ' + item.label : '');
+      sel.appendChild(opt);
+    });
+  });
+  sel.value = getDefaultPage();
+}
+
+function applyDefaultPage() {
+  const def = getDefaultPage();
+  if (def && def !== 'home') {
+    showFrame(def, null);
+  }
+}
+
+// ── Boot: fetch config then status ────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    enabledModules = cfg.modules || {};
+  } catch(e) {
+    // Fall back: show everything
+    Object.keys(MODULE_DEF).forEach(k => enabledModules[k] = true);
+  }
+  buildNav();
+  buildQuickGrid();
+  buildResourceGrid();
+  populateDefaultPageSelect();
+  applyDefaultPage();
+  await refreshStatus();
+}
+
+// ── Build sidebar from enabled modules ───────────────────────────────────────
+function buildNav() {
+  const sidebar = document.getElementById('sidebar');
+  // Keep the Home section (first child), rebuild the rest
+  const homeSection = sidebar.querySelector('.nav-section');
+  sidebar.innerHTML = '';
+  sidebar.appendChild(homeSection);
+
+  Object.entries(MODULE_DEF).forEach(([key, mod]) => {
+    if (!enabledModules[key]) return;
+    const section = document.createElement('div');
+    section.className = 'nav-section';
+    section.innerHTML = `<div class="nav-label">${mod.label}</div>`;
+    mod.nav.forEach(item => {
+      const el = document.createElement('div');
+      el.className = 'nav-item';
+      if (item.key) { el.dataset.key = item.key; }
+      el.innerHTML = `${item.key ? '<span class="dot"></span>' : ''}<span class="icon">${item.icon}</span><span class="label">${item.label}</span>`;
+      el.onclick = () => showFrame(item.url, el);
+      section.appendChild(el);
+    });
+    sidebar.appendChild(section);
+  });
+
+  // External links always last
+  const ext = document.createElement('div');
+  ext.className = 'nav-section';
+  ext.innerHTML = `
+    <div class="nav-label">Community</div>
+    <div class="nav-item" onclick="openExternal('https://nervos.org')"><span class="icon">🌐</span><span class="label">Nervos.org</span></div>
+    <div class="nav-item" onclick="openExternal('https://explorer.nervos.org')"><span class="icon">🔍</span><span class="label">CKB Explorer</span></div>
+    <div class="nav-item" onclick="openExternal('https://fiber.world')"><span class="icon">⚡</span><span class="label">Fiber Network</span></div>
+    <div class="nav-item" onclick="openExternal('https://docs.nervos.org')"><span class="icon">📖</span><span class="label">CKB Docs</span></div>
+    <div class="nav-item" onclick="openExternal('https://discord.gg/nervosnetwork')"><span class="icon">💬</span><span class="label">Discord</span></div>
+    <div class="nav-item" onclick="openExternal('https://wyltekindustries.com')"><span class="icon">🦞</span><span class="label">Wyltek</span></div>`;
+  sidebar.appendChild(ext);
+}
+
+// ── Build resource draw grid ──────────────────────────────────────────────────
+function buildResourceGrid() {
+  const grid = document.getElementById('resourceGrid');
+  const totalEl = document.getElementById('totalRam');
+  const totalRow = document.getElementById('totalRow');
+
+  let totalRam = BASE_COST.ram_mb;
+
+  grid.innerHTML = Object.entries(MODULE_DEF).map(([key, mod]) => {
+    const on = !!enabledModules[key];
+    if (on) totalRam += (mod.ram_mb || 0);
+
+    const pollLabel = mod.poll_ms
+      ? 'every ' + (mod.poll_ms / 1000) + 's'
+      : 'none';
+
+    const ramLabel  = mod.ram_mb
+      ? mod.ram_mb + ' MB (daemon)'
+      : 'none (browser tool)';
+
+    const depsHtml = mod.deps.map(d => `<div>${d}</div>`).join('');
+
+    return `<div class="module-card ${on ? 'enabled' : 'disabled'}">
+      <div class="module-top">
+        <span class="module-name">${mod.icon} ${mod.label}</span>
+        <span class="module-toggle ${on ? 'toggle-on' : 'toggle-off'}">${on ? 'enabled' : 'disabled'}</span>
+      </div>
+      <div class="module-desc">${mod.desc}</div>
+      <div class="res-row"><span class="res-key">RAM</span><span class="res-val ${mod.ram_mb > 200 ? 'hi' : ''}">${ramLabel}</span></div>
+      <div class="res-row"><span class="res-key">CPU</span><span class="res-val">${mod.cpu}</span></div>
+      <div class="res-row"><span class="res-key">Poll</span><span class="res-val">${pollLabel}</span></div>
+      <div class="deps-list">${depsHtml}</div>
+    </div>`;
+  }).join('');
+
+  totalEl.textContent = '~' + totalRam + ' MB RAM total';
+  totalRow.style.display = 'flex';
+}
+  const grid = document.getElementById('quickGrid');
+  grid.innerHTML = '';
+  Object.entries(MODULE_DEF).forEach(([key, mod]) => {
+    if (!enabledModules[key]) return;
+    mod.nav.forEach(item => {
+      const btn = document.createElement('div');
+      btn.className = 'quick-btn';
+      btn.innerHTML = `<span>${item.icon}</span> ${item.label === 'Monitor' ? mod.label : item.label}`;
+      btn.onclick = () => showFrame(item.url, null);
+      grid.appendChild(btn);
+    });
+  });
+}
+
+// ── Status polling ────────────────────────────────────────────────────────────
+async function refreshStatus() {
+  document.getElementById('lastRefresh').textContent = 'Refreshing…';
+  try {
+    const res = await fetch('/api/status');
+    statusCache = await res.json();
+    renderStatusCards(statusCache);
+    updateSidebarDots(statusCache);
+    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('lastRefresh').textContent = 'Updated ' + now;
+  } catch(e) {
+    document.getElementById('lastRefresh').textContent = 'Cannot reach server';
+  }
+}
+
+function renderStatusCards(status) {
+  const grid = document.getElementById('statusGrid');
+  const cards = Object.entries(MODULE_DEF)
+    .filter(([key]) => enabledModules[key])
+    .map(([key, mod]) => {
+      const ok = status[key];
+      const cls = ok === undefined ? 'warn' : ok ? 'ok' : 'down';
+      const badge = ok === undefined ? 'unknown' : ok ? 'online' : 'offline';
+      const badgeCls = ok === undefined ? 'badge-warn' : ok ? 'badge-ok' : 'badge-down';
+      const url = mod.nav[0].url;
+      return `<div class="status-card ${cls}" onclick="showFrame('${url}', null)">
+        <div class="card-top">
+          <span class="card-name">${mod.icon} ${mod.label}</span>
+          <span class="card-badge ${badgeCls}">${badge}</span>
+        </div>
+        <div class="card-desc">${mod.desc}</div>
+      </div>`;
+    });
+  grid.innerHTML = cards.length ? cards.join('') : '<p style="color:var(--muted);font-size:.85rem">No modules enabled. Edit wydash.conf to add tools.</p>';
+}
+
+function updateSidebarDots(status) {
+  document.querySelectorAll('.nav-item[data-key]').forEach(item => {
+    const ok = status[item.dataset.key];
+    item.classList.remove('ok','warn','down');
+    item.classList.add(ok === true ? 'ok' : ok === false ? 'down' : 'warn');
+  });
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function showPage(page, el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('home-panel').style.display = 'block';
+  document.getElementById('frame-container').classList.remove('active');
+}
+
+function showFrame(url, el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('mainFrame').src = url;
+  document.getElementById('home-panel').style.display = 'none';
+  document.getElementById('frame-container').classList.add('active');
+}
+
+function openExternal(url) { window.open(url, '_blank'); }
+
+init();
+setInterval(refreshStatus, 60000);
+</script>
+</body>
+</html>
