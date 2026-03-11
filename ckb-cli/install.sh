@@ -44,19 +44,19 @@ TARBALL_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}
 
 # ── Banner ────────────────────────────────────────────────
 echo -e "${BOLD}"
-echo "  ╔═══════════════════════════════════════════╗"
-echo "  ║   CKB CLI Installer v1.0                  ║"
-echo "  ║   Nervos CKB · nervosnetwork               ║"
-echo "  ╚═══════════════════════════════════════════╝"
+echo "  ╔═══════════════════════════════════════╗"
+echo "  ║   CKB CLI Installer v1.0              ║"
+echo "  ║   Nervos CKB · nervosnetwork           ║"
+echo "  ╚═══════════════════════════════════════╝"
 echo -e "${RESET}"
 echo "  ckb-cli — command-line interface for Nervos CKB"
-echo "  Query blockchain, manage wallets, send transactions"
+echo "  Send transactions, manage wallets, query chain state"
 echo ""
 
 # ── Config ────────────────────────────────────────────────
 write_step "Configuration"
-DEFAULT_INSTALL="$HOME/.ckb-cli/bin"
-ask INSTALL_DIR  "Install directory" "$DEFAULT_INSTALL"
+INSTALL_DIR="$HOME/.ckb-cli/bin"
+ask INSTALL_DIR "Install directory" "$INSTALL_DIR"
 
 echo ""
 write_ok "Install dir: $INSTALL_DIR"
@@ -87,48 +87,48 @@ chmod +x "${INSTALL_DIR}/${BINARY}"
 write_ok "Binary installed: ${INSTALL_DIR}/${BINARY}"
 
 # ── PATH ──────────────────────────────────────────────────
-write_step "Adding to PATH"
-if ! echo "$PATH" | grep -q "${INSTALL_DIR}"; then
+write_step "PATH"
+if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
   SHELL_RC="$HOME/.bashrc"
   [ "$IS_MAC" = "1" ] && SHELL_RC="$HOME/.zshrc"
-  echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "$SHELL_RC"
-  write_ok "Added ${INSTALL_DIR} to PATH in $SHELL_RC"
-  export PATH="${INSTALL_DIR}:$PATH"
+  echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$SHELL_RC"
+  write_ok "Added $INSTALL_DIR to PATH in $SHELL_RC"
+  export PATH="${INSTALL_DIR}:${PATH}"
 else
-  write_ok "${INSTALL_DIR} already in PATH"
+  write_ok "$INSTALL_DIR already in PATH"
 fi
 
 # ── Smoke test ────────────────────────────────────────────
 write_step "Smoke Test"
 SMOKE_PASS=0
-VERSION_OUT="$("${INSTALL_DIR}/${BINARY}" --version 2>&1 || true)"
-if echo "$VERSION_OUT" | grep -q "${VERSION}"; then
+VERSION_OUTPUT="$("${INSTALL_DIR}/${BINARY}" --version 2>/dev/null || true)"
+if echo "$VERSION_OUTPUT" | grep -q "$VERSION"; then
   SMOKE_PASS=1
 fi
 
 if [ "$SMOKE_PASS" = "1" ]; then
   write_ok "Smoke test passed ✓"
-  write_ok "Version: $VERSION_OUT"
+  write_ok "Version: $VERSION_OUTPUT"
 else
-  write_warn "Version check unexpected output: $VERSION_OUT"
-  write_warn "Binary may still work — check manually: ${INSTALL_DIR}/${BINARY} --version"
+  write_warn "Unexpected version output: $VERSION_OUTPUT"
+  write_warn "Try: ${INSTALL_DIR}/${BINARY} --version"
 fi
 
 # ── Summary ───────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${GREEN}════════════════════════════════════════${RESET}"
-echo -e "${BOLD}${GREEN}  ckb-cli installed!${RESET}"
+echo -e "${BOLD}${GREEN}  CKB CLI installed!${RESET}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${BOLD}Version:${RESET}     v${VERSION}"
 echo -e "  ${BOLD}Binary:${RESET}      ${INSTALL_DIR}/${BINARY}"
 echo ""
-echo -e "  ${BOLD}Usage examples:${RESET}"
-echo "    ckb-cli --version"
-echo "    ckb-cli wallet get-capacity --address <addr>"
-echo "    ckb-cli rpc get_tip_block_number"
+echo -e "  ${BOLD}Quick start:${RESET}"
+echo -e "  ${CYAN}  ckb-cli --version${RESET}"
+echo -e "  ${CYAN}  ckb-cli wallet get-capacity --address <addr>${RESET}"
+echo -e "  ${CYAN}  ckb-cli rpc local_node_info --url http://127.0.0.1:8114${RESET}"
 echo ""
-echo -e "  ${YELLOW}Note:${RESET} Restart your shell or run: export PATH=\"${INSTALL_DIR}:\$PATH\""
+write_info "Restart your shell or run: export PATH=\"${INSTALL_DIR}:\$PATH\""
 echo ""
-write_ok "Done!"
+write_ok "Done! ckb-cli is ready to use."
 echo ""

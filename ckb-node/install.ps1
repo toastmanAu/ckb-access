@@ -2,17 +2,17 @@
 # CKB Full Node installer — Windows (PowerShell 5.1+)
 # Run as Admin: irm https://raw.githubusercontent.com/toastmanAu/ckb-access/main/ckb-node/install.ps1 | iex
 
-$script:VERSION      = "0.204.0"
-$script:BINARY       = "ckb.exe"
-$script:REPO         = "nervosnetwork/ckb"
-$script:SERVICE_NAME = "ckb-node"
+$script:VERSION    = "0.204.0"
+$script:BINARY     = "ckb.exe"
+$script:REPO       = "nervosnetwork/ckb"
+$script:SERVICE_NAME = "CkbNode"
 
 # ── Helpers ───────────────────────────────────────────────
-function Write-Step { param($m) Write-Host "`n  >> $m" -ForegroundColor Cyan }
-function Write-Ok   { param($m) Write-Host "  [OK] $m" -ForegroundColor Green }
-function Write-Warn { param($m) Write-Host "  [!!] $m" -ForegroundColor Yellow }
-function Write-Info { param($m) Write-Host "  [i]  $m" -ForegroundColor Gray }
-function Write-Err  { param($m) Write-Host "  [X]  $m" -ForegroundColor Red }
+function Write-Step  { param($m) Write-Host "`n  >> $m" -ForegroundColor Cyan }
+function Write-Ok    { param($m) Write-Host "  [OK] $m" -ForegroundColor Green }
+function Write-Warn  { param($m) Write-Host "  [!!] $m" -ForegroundColor Yellow }
+function Write-Info  { param($m) Write-Host "  [i]  $m" -ForegroundColor Gray }
+function Write-Err   { param($m) Write-Host "  [X]  $m" -ForegroundColor Red }
 
 function Ask {
     param($Prompt, $Default)
@@ -24,14 +24,15 @@ function Ask {
 # ── Banner ────────────────────────────────────────────────
 function Show-Banner {
     Write-Host ""
-    Write-Host "  +============================================+" -ForegroundColor Cyan
-    Write-Host "  |   CKB Full Node Installer v1.0            |" -ForegroundColor Cyan
-    Write-Host "  |   Nervos CKB - nervosnetwork               |" -ForegroundColor Cyan
-    Write-Host "  +============================================+" -ForegroundColor Cyan
+    Write-Host "  +==========================================+" -ForegroundColor Cyan
+    Write-Host "  |   CKB Full Node Installer v1.0          |" -ForegroundColor Cyan
+    Write-Host "  |   Nervos CKB - nervosnetwork             |" -ForegroundColor Cyan
+    Write-Host "  +==========================================+" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  WARNING: Full mainnet sync requires 200GB+ of disk space." -ForegroundColor Yellow
-    Write-Host "  Initial sync can take days depending on hardware." -ForegroundColor Yellow
-    Write-Host "  Make sure your data directory has sufficient free space!" -ForegroundColor Yellow
+    Write-Host "  WARNING: Mainnet sync requires 200GB+ of disk space." -ForegroundColor Yellow
+    Write-Host "  Ensure your data directory has sufficient free space." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Full node - validates all transactions, stores full chain history" -ForegroundColor Gray
     Write-Host ""
 }
 
@@ -39,11 +40,10 @@ function Show-Banner {
 function Collect-Config {
     Write-Step "Configuration"
     $script:INSTALL_DIR = Ask "Install directory" "$env:USERPROFILE\.ckb-node"
-    $script:RPC_PORT    = Ask "RPC port" "8114"
-    $script:P2P_PORT    = Ask "P2P port" "8115"
+    $script:RPC_PORT    = Ask "RPC listen port"   "8114"
+    $script:P2P_PORT    = Ask "P2P listen port"   "8115"
 
-    $script:DATA_DIR    = "$($script:INSTALL_DIR)\data"
-    $script:LOG_FILE    = "$($script:DATA_DIR)\ckb.log"
+    $script:LOG_FILE    = "$($script:INSTALL_DIR)\ckb-node.log"
 
     Write-Host ""
     Write-Ok "Install dir: $($script:INSTALL_DIR)"
@@ -57,14 +57,13 @@ function Download-Binary {
     $ErrorActionPreference = "Stop"
     Write-Step "Downloading ckb v$($script:VERSION)"
 
-    # Windows: always x86_64, .zip archive
     $zipName = "ckb_v$($script:VERSION)_x86_64-pc-windows-msvc.zip"
     $url     = "https://github.com/$($script:REPO)/releases/download/v$($script:VERSION)/$zipName"
 
     try {
         $null = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -ErrorAction Stop
     } catch {
-        Write-Err "Release zip not found at: $url"
+        Write-Err "Release archive not found at: $url"
         Write-Info "Check https://github.com/$($script:REPO)/releases for available versions"
         exit 1
     }
@@ -74,17 +73,16 @@ function Download-Binary {
 
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
     New-Item -ItemType Directory -Force -Path "$InstallDir\bin" | Out-Null
-    New-Item -ItemType Directory -Force -Path $script:DATA_DIR | Out-Null
 
     Write-Info "Downloading from GitHub..."
     Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
 
     Write-Info "Extracting..."
-    Expand-Archive -Path $archive -DestinationPath $tmp -Force
+    & tar -xf $archive -C $tmp 2>&1 | Out-Null
 
     $binSrc = Get-ChildItem -Path $tmp -Filter "ckb.exe" -Recurse | Select-Object -First 1
     if (-not $binSrc) {
-        Write-Err "ckb.exe not found in zip"
+        Write-Err "ckb.exe not found in archive"
         exit 1
     }
     Copy-Item $binSrc.FullName "$InstallDir\bin\$($script:BINARY)" -Force
@@ -92,33 +90,33 @@ function Download-Binary {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# ── Init / Config ─────────────────────────────────────────
+# ── Init node ─────────────────────────────────────────────
 function Init-Node {
     param($InstallDir)
     Write-Step "Initialising CKB node (mainnet)"
-
-    $ckbToml = "$InstallDir\ckb.toml"
-    if (-not (Test-Path $ckbToml)) {
-        Write-Info "Running: ckb init --chain mainnet"
-        & "$InstallDir\bin\$($script:BINARY)" init --chain mainnet -C $InstallDir 2>&1 | Out-Null
-        Write-Ok "Config generated by 'ckb init --chain mainnet'"
-    } else {
-        Write-Ok "Config already exists -- skipping init"
+    $configFile = "$InstallDir\ckb.toml"
+    if (Test-Path $configFile) {
+        Write-Warn "Config already exists — skipping init (delete $configFile to reinitialise)"
+        $script:CONFIG_FILE = $configFile
+        return
     }
+    & "$InstallDir\bin\$($script:BINARY)" init --chain mainnet -C $InstallDir 2>&1 | Out-Null
+    $script:CONFIG_FILE = $configFile
+    Write-Ok "Config generated: $configFile"
 
     # Patch RPC port if non-default
     if ($script:RPC_PORT -ne "8114") {
-        $content = Get-Content $ckbToml -Raw
-        $patched = $content -replace 'listen_address = "127\.0\.0\.1:8114"', "listen_address = `"127.0.0.1:$($script:RPC_PORT)`""
-        $patched | Set-Content $ckbToml -Encoding UTF8
+        $content = Get-Content $configFile -Raw
+        $content = $content -replace 'listen_address = "127\.0\.0\.1:8114"', "listen_address = `"127.0.0.1:$($script:RPC_PORT)`""
+        $content | Set-Content $configFile -Encoding UTF8
         Write-Ok "RPC port patched to $($script:RPC_PORT)"
     }
 
     # Patch P2P port if non-default
     if ($script:P2P_PORT -ne "8115") {
-        $content = Get-Content $ckbToml -Raw
-        $patched = $content -replace '/ip4/0\.0\.0\.0/tcp/8115', "/ip4/0.0.0.0/tcp/$($script:P2P_PORT)"
-        $patched | Set-Content $ckbToml -Encoding UTF8
+        $content = Get-Content $configFile -Raw
+        $content = $content -replace '/tcp/8115"', "/tcp/$($script:P2P_PORT)`""
+        $content | Set-Content $configFile -Encoding UTF8
         Write-Ok "P2P port patched to $($script:P2P_PORT)"
     }
 }
@@ -131,10 +129,54 @@ function Write-StartBat {
     Write-Ok "Start script: $InstallDir\start-ckb-node.bat"
 }
 
+# ── Service (NSSM) ────────────────────────────────────────
+function Install-Service {
+    param($InstallDir)
+    Write-Step "Installing Windows Service"
+    $svcName = $script:SERVICE_NAME
+
+    $nssmExe = "$InstallDir\bin\nssm.exe"
+    $nssmUrl = "https://nssm.cc/release/nssm-2.24.zip"
+
+    try {
+        $tmp = "$env:TEMP\nssm-dl"
+        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+        Invoke-WebRequest -Uri $nssmUrl -OutFile "$tmp\nssm.zip" -UseBasicParsing
+        & tar -xf "$tmp\nssm.zip" -C $tmp 2>&1 | Out-Null
+        $nssmSrc = Get-ChildItem -Path $tmp -Filter "nssm.exe" -Recurse |
+                   Where-Object { $_.FullName -like "*win64*" } | Select-Object -First 1
+        if (-not $nssmSrc) {
+            $nssmSrc = Get-ChildItem -Path $tmp -Filter "nssm.exe" -Recurse | Select-Object -First 1
+        }
+        if ($nssmSrc) {
+            Copy-Item $nssmSrc.FullName $nssmExe -Force
+        }
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    } catch {
+        Write-Warn "Could not install NSSM — service not created. Use start-ckb-node.bat to run manually."
+        return
+    }
+
+    & $nssmExe stop $svcName 2>&1 | Out-Null
+    & $nssmExe remove $svcName confirm 2>&1 | Out-Null
+    Start-Sleep 1
+
+    & $nssmExe install $svcName "$InstallDir\bin\$($script:BINARY)" | Out-Null
+    & $nssmExe set $svcName AppParameters "run -C `"$InstallDir`"" | Out-Null
+    & $nssmExe set $svcName AppDirectory $InstallDir | Out-Null
+    & $nssmExe set $svcName AppEnvironmentExtra "RUST_LOG=info" | Out-Null
+    & $nssmExe set $svcName AppStdout $script:LOG_FILE | Out-Null
+    & $nssmExe set $svcName AppStderr $script:LOG_FILE | Out-Null
+    & $nssmExe set $svcName Start SERVICE_AUTO_START | Out-Null
+
+    Write-Ok "Service installed: $svcName"
+    Write-Info "Manage with: nssm start/stop/restart $svcName"
+}
+
 # ── PATH ──────────────────────────────────────────────────
 function Add-ToPath {
     param($InstallDir)
-    $binDir  = "$InstallDir\bin"
+    $binDir = "$InstallDir\bin"
     $current = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($current -notlike "*$binDir*") {
         [Environment]::SetEnvironmentVariable("Path", "$current;$binDir", "User")
@@ -158,78 +200,31 @@ function Add-FirewallRule {
             -Protocol TCP -LocalPort $Port -Action Allow -ErrorAction Stop | Out-Null
         Write-Ok "Firewall rule added: TCP port $Port"
     } catch {
-        Write-Warn "Could not add firewall rule -- add manually: TCP port $Port inbound"
+        Write-Warn "Could not add firewall rule — add manually if needed: TCP port $Port"
     }
-}
-
-# ── Service (NSSM) ────────────────────────────────────────
-function Install-Service {
-    param($InstallDir)
-    Write-Step "Installing Windows Service"
-
-    $nssmExe = "$InstallDir\bin\nssm.exe"
-    $nssmUrl = "https://nssm.cc/release/nssm-2.24.zip"
-
-    try {
-        $tmp = "$env:TEMP\nssm-dl"
-        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-        Invoke-WebRequest -Uri $nssmUrl -OutFile "$tmp\nssm.zip" -UseBasicParsing
-        Expand-Archive -Path "$tmp\nssm.zip" -DestinationPath $tmp -Force
-        $nssmSrc = Get-ChildItem -Path $tmp -Filter "nssm.exe" -Recurse |
-                   Where-Object { $_.FullName -like "*win64*" } | Select-Object -First 1
-        if (-not $nssmSrc) {
-            $nssmSrc = Get-ChildItem -Path $tmp -Filter "nssm.exe" -Recurse | Select-Object -First 1
-        }
-        if ($nssmSrc) {
-            Copy-Item $nssmSrc.FullName $nssmExe -Force
-        }
-        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    } catch {
-        Write-Warn "Could not install NSSM -- service not created. Use start-ckb-node.bat to run manually."
-        return
-    }
-
-    # Remove existing service
-    try { $null = & $nssmExe stop $script:SERVICE_NAME 2>&1 } catch {}
-    try { $null = & $nssmExe remove $script:SERVICE_NAME confirm 2>&1 } catch {}
-    Start-Sleep 1
-
-    & $nssmExe install $script:SERVICE_NAME "$InstallDir\bin\$($script:BINARY)" | Out-Null
-    & $nssmExe set $script:SERVICE_NAME AppParameters "run -C `"$InstallDir`"" | Out-Null
-    & $nssmExe set $script:SERVICE_NAME AppDirectory $InstallDir | Out-Null
-    & $nssmExe set $script:SERVICE_NAME AppEnvironmentExtra "RUST_LOG=info" | Out-Null
-    & $nssmExe set $script:SERVICE_NAME AppStdout $script:LOG_FILE | Out-Null
-    & $nssmExe set $script:SERVICE_NAME AppStderr $script:LOG_FILE | Out-Null
-    & $nssmExe set $script:SERVICE_NAME Start SERVICE_AUTO_START | Out-Null
-
-    Write-Ok "Service installed: $($script:SERVICE_NAME)"
-    Write-Info "Manage with: nssm start/stop/restart $($script:SERVICE_NAME)"
 }
 
 # ── Smoke test ────────────────────────────────────────────
 function Run-SmokeTest {
     param($InstallDir, $RpcPort)
     Write-Step "Smoke Test"
-    Write-Info "Starting node briefly to verify RPC responds..."
-
-    $binExe = "$InstallDir\bin\$($script:BINARY)"
+    Write-Info "Starting node briefly to verify it launches..."
 
     try { $null = & taskkill /IM "ckb.exe" /F 2>&1 } catch {}
     Start-Sleep 2
 
     $env:RUST_LOG = "info"
-    $proc = Start-Process -FilePath $binExe `
+    $proc = Start-Process -FilePath "$InstallDir\bin\$($script:BINARY)" `
         -ArgumentList "run -C `"$InstallDir`"" `
         -WindowStyle Hidden -PassThru
 
     $smokePass = $false
-    $nodeId    = ""
     $rpcUrl    = "http://127.0.0.1:$RpcPort"
     $body      = '{"jsonrpc":"2.0","method":"local_node_info","params":[],"id":1}'
     Write-Host "  Waiting for RPC on 127.0.0.1:$RpcPort" -NoNewline
 
     for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep 2
+        Start-Sleep 1
         Write-Host "." -NoNewline
         try {
             $r = Invoke-WebRequest -Uri $rpcUrl -Method POST `
@@ -237,8 +232,7 @@ function Run-SmokeTest {
                  -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
             if ($r.Content -like '*node_id*') {
                 $smokePass = $true
-                $parsed = $r.Content | ConvertFrom-Json
-                $nodeId = $parsed.result.node_id
+                $nodeId = ($r.Content | ConvertFrom-Json).result.node_id
                 break
             }
         } catch {}
@@ -249,12 +243,13 @@ function Run-SmokeTest {
     Start-Sleep 1
     try { $null = & taskkill /IM "ckb.exe" /F 2>&1 } catch {}
     Start-Sleep 1
+    Write-Ok "Smoke test node stopped"
 
     if ($smokePass) {
         Write-Ok "Smoke test passed!"
         Write-Ok "Node ID: $nodeId"
     } else {
-        Write-Warn "Smoke test timed out -- check logs: $($script:LOG_FILE)"
+        Write-Warn "Smoke test timed out — check logs: $($script:LOG_FILE)"
     }
 }
 
@@ -275,7 +270,7 @@ function Show-Summary {
     Write-Host ""
     Write-Ok "RPC endpoint: http://127.0.0.1:$RpcPort"
     Write-Host ""
-    Write-Host "  WARNING: Full mainnet sync requires 200GB+ disk and may take days." -ForegroundColor Yellow
+    Write-Warn "Mainnet sync will take days and use 200GB+ of disk."
     Write-Host ""
     Write-Info "Test RPC after start:"
     Write-Info "  curl -X POST http://127.0.0.1:$RpcPort -H 'Content-Type: application/json' -d '{`"jsonrpc`":`"2.0`",`"method`":`"local_node_info`",`"params`":[],`"id`":1}'"
@@ -283,16 +278,18 @@ function Show-Summary {
 }
 
 # ── Start now? ────────────────────────────────────────────
-function Start-Node {
+function Start-CkbNode {
     param($InstallDir)
+    $svcName = $script:SERVICE_NAME
+    $nssmExe = "$InstallDir\bin\nssm.exe"
+
     Write-Step "Start Node?"
     $startNow = Ask "Start ckb-node now?" "Y"
     if ($startNow -match "^[Yy]") {
-        $nssmExe = "$InstallDir\bin\nssm.exe"
         if (Test-Path $nssmExe) {
-            & $nssmExe start $script:SERVICE_NAME 2>&1 | Out-Null
-            Write-Ok "Service started: $($script:SERVICE_NAME)"
-            Write-Info "Manage: nssm start/stop/restart $($script:SERVICE_NAME)"
+            & $nssmExe start $svcName 2>&1 | Out-Null
+            Write-Ok "Service started: $svcName"
+            Write-Info "Manage: nssm start/stop/restart $svcName"
         } else {
             $bat = "$InstallDir\start-ckb-node.bat"
             Start-Process -FilePath "cmd" -ArgumentList "/c `"$bat`"" -WindowStyle Minimized
@@ -300,9 +297,8 @@ function Start-Node {
         }
         Write-Info "Check logs: $($script:LOG_FILE)"
     } else {
-        $nssmExe = "$InstallDir\bin\nssm.exe"
         if (Test-Path $nssmExe) {
-            Write-Info "To start: nssm start $($script:SERVICE_NAME)"
+            Write-Info "To start: nssm start $svcName"
         } else {
             Write-Info "To start: $InstallDir\start-ckb-node.bat"
         }
@@ -312,6 +308,7 @@ function Start-Node {
 # ── Main ──────────────────────────────────────────────────
 Show-Banner
 Collect-Config
+
 Download-Binary  -InstallDir $script:INSTALL_DIR
 Init-Node        -InstallDir $script:INSTALL_DIR
 Write-StartBat   -InstallDir $script:INSTALL_DIR
@@ -320,4 +317,4 @@ Add-FirewallRule -Port $script:P2P_PORT
 Install-Service  -InstallDir $script:INSTALL_DIR
 Run-SmokeTest    -InstallDir $script:INSTALL_DIR -RpcPort $script:RPC_PORT
 Show-Summary     -InstallDir $script:INSTALL_DIR -RpcPort $script:RPC_PORT -P2pPort $script:P2P_PORT
-Start-Node       -InstallDir $script:INSTALL_DIR
+Start-CkbNode    -InstallDir $script:INSTALL_DIR
