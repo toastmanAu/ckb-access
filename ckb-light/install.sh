@@ -102,31 +102,67 @@ mkdir -p "${INSTALL_DIR}/bin" "${DATA_DIR}/store" "${DATA_DIR}/network"
 if [ "$BUILD_FROM_SOURCE" = "1" ]; then
   write_info "Building from source (arm64 — no prebuilt binary for this release)"
 
-  # Install Rust if needed
+  # ── Build dependencies ──────────────────────────────────
+  write_step "Installing build dependencies"
+  if [ "$IS_LINUX" = "1" ]; then
+    if command -v apt-get &>/dev/null; then
+      sudo apt-get update -qq
+      sudo apt-get install -y -qq \
+        build-essential pkg-config libssl-dev libclang-dev clang llvm \
+        git curl 2>/dev/null
+      write_ok "apt deps installed"
+    elif command -v yum &>/dev/null; then
+      sudo yum install -y -q \
+        gcc gcc-c++ make pkgconfig openssl-devel clang llvm-devel git curl
+      write_ok "yum deps installed"
+    elif command -v dnf &>/dev/null; then
+      sudo dnf install -y -q \
+        gcc gcc-c++ make pkgconfig openssl-devel clang llvm-devel git curl
+      write_ok "dnf deps installed"
+    else
+      write_warn "Unknown package manager — ensure gcc, libssl-dev, clang are installed"
+    fi
+  elif [ "$IS_MAC" = "1" ]; then
+    if ! command -v brew &>/dev/null; then
+      write_info "Installing Homebrew..."
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+    write_info "Installing openssl@1.1 via Homebrew..."
+    brew install openssl@1.1 2>/dev/null || brew upgrade openssl@1.1 2>/dev/null || true
+    # Set OpenSSL env vars for arm64 macOS build
+    export OPENSSL_LIB_DIR="$(brew --prefix openssl@1.1)/lib"
+    export OPENSSL_INCLUDE_DIR="$(brew --prefix openssl@1.1)/include"
+    export OPENSSL_STATIC=1
+    write_ok "Homebrew openssl@1.1 ready"
+  fi
+
+  # ── Rust toolchain ──────────────────────────────────────
+  RUST_VERSION="1.92.0"
   if ! command -v cargo &>/dev/null; then
-    write_info "Installing Rust toolchain..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --quiet
+    write_info "Installing Rust toolchain (this may take a minute)..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --quiet \
+      --default-toolchain "$RUST_VERSION"
     source "$HOME/.cargo/env"
+  else
+    write_info "Ensuring Rust $RUST_VERSION is available..."
+    rustup toolchain install "$RUST_VERSION" --profile minimal 2>/dev/null || true
+    rustup override set "$RUST_VERSION" 2>/dev/null || true
+    source "$HOME/.cargo/env" 2>/dev/null || true
   fi
+  write_ok "Rust $(rustc --version 2>/dev/null || echo 'ready')"
 
-  # Install build deps
-  if [ "$IS_LINUX" = "1" ] && command -v apt-get &>/dev/null; then
-    write_info "Installing build dependencies..."
-    sudo apt-get install -y -qq build-essential pkg-config libssl-dev clang 2>/dev/null || true
-  fi
-
+  # ── Clone and build ─────────────────────────────────────
   TMP_SRC="$(mktemp -d)"
   write_info "Cloning ckb-light-client v${VERSION}..."
   git clone --depth=1 --branch "v${VERSION}" \
-    "https://github.com/${REPO}.git" "$TMP_SRC" 2>&1 | tail -3
-
-  write_info "Compiling (this takes 20-30 min on arm64)..."
+    "https://github.com/${REPO}.git" "$TMP_SRC" 2>&1 | tail -2
+  write_info "Compiling — grab a coffee, this takes 20-30 min on arm64..."
   cd "$TMP_SRC"
-  cargo build --release --bin ckb-light-client 2>&1 | tail -5
+  cargo build --release --bin ckb-light-client 2>&1 | grep -E "Compiling|Finished|error" | tail -10
   cp "target/release/ckb-light-client" "${INSTALL_DIR}/bin/${BINARY}"
   cd - >/dev/null
   rm -rf "$TMP_SRC"
-  write_ok "Built and installed from source"
+  write_ok "Built and installed from source: ${INSTALL_DIR}/bin/${BINARY}"
 
 else
   TMP_DIR="$(mktemp -d)"

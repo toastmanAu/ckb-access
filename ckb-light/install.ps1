@@ -60,8 +60,19 @@ function Download-Binary {
     $ErrorActionPreference = "Stop"
     Write-Step "Downloading ckb-light-client v$($script:VERSION)"
 
+    # Windows is always x86_64 — prebuilt binary always available
     $tarball = "ckb-light-client_v$($script:VERSION)-x86_64-windows.tar.gz"
     $url     = "https://github.com/$($script:REPO)/releases/download/v$($script:VERSION)/$tarball"
+
+    # Verify URL exists before downloading
+    try {
+        $null = Invoke-WebRequest -Uri $url -Method Head -UseBasicParsing -ErrorAction Stop
+    } catch {
+        Write-Err "Release tarball not found at: $url"
+        Write-Info "Check https://github.com/$($script:REPO)/releases for available versions"
+        exit 1
+    }
+
     $tmp     = "$env:TEMP\ckb-light-$($script:VERSION)"
     $archive = "$tmp\$tarball"
 
@@ -74,7 +85,6 @@ function Download-Binary {
     Invoke-WebRequest -Uri $url -OutFile $archive -UseBasicParsing
 
     Write-Info "Extracting..."
-    # Use tar (available Windows 10+)
     & tar -xzf $archive -C $tmp 2>&1 | Out-Null
 
     $binSrc = Get-ChildItem -Path $tmp -Filter "ckb-light-client.exe" -Recurse | Select-Object -First 1
