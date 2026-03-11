@@ -20,31 +20,50 @@ ask() { local var="$1" prompt="$2" default="$3"; read -rp "  ${prompt} [${defaul
 # ── Platform detect ───────────────────────────────────────
 OS="$(uname -s)"
 ARCH="$(uname -m)"
+BUILD_FROM_SOURCE=0
+
 case "$OS" in
   Linux)
     case "$ARCH" in
       x86_64)  TARBALL="ckb-light-client_v${VERSION}-x86_64-linux.tar.gz" ;;
       aarch64)
-        echo ""
-        echo "  NOTE: No official arm64 binary for ckb-light-client yet."
-        echo "  Pre-built binaries are x86_64 only."
-        echo "  To build from source: https://github.com/nervosnetwork/ckb-light-client"
-        echo "  Or run on an x86_64 machine (Linux/macOS/Windows)."
-        echo ""
-        exit 1
+        # Check if prebuilt arm64 binary exists in this release
+        ARM_URL="https://github.com/${REPO}/releases/download/v${VERSION}/ckb-light-client_v${VERSION}-aarch64-linux.tar.gz"
+        if curl -fsI "$ARM_URL" &>/dev/null; then
+          TARBALL="ckb-light-client_v${VERSION}-aarch64-linux.tar.gz"
+        else
+          echo -e "  ${YELLOW}No prebuilt arm64 binary for v${VERSION} — will build from source (~20-30 min)${RESET}"
+          BUILD_FROM_SOURCE=1
+          TARBALL=""
+        fi
         ;;
       *)       echo "Unsupported arch: $ARCH"; exit 1 ;;
     esac
     IS_LINUX=1; IS_MAC=0
     ;;
   Darwin)
-    TARBALL="ckb-light-client_v${VERSION}-x86_64-darwin.tar.gz"
+    case "$ARCH" in
+      x86_64) TARBALL="ckb-light-client_v${VERSION}-x86_64-darwin.tar.gz" ;;
+      arm64)
+        ARM_URL="https://github.com/${REPO}/releases/download/v${VERSION}/ckb-light-client_v${VERSION}-aarch64-apple-darwin.tar.gz"
+        if curl -fsI "$ARM_URL" &>/dev/null; then
+          TARBALL="ckb-light-client_v${VERSION}-aarch64-apple-darwin.tar.gz"
+        else
+          echo -e "  ${YELLOW}No prebuilt arm64/M1 binary for v${VERSION} — will build from source (~10-15 min)${RESET}"
+          BUILD_FROM_SOURCE=1
+          TARBALL=""
+        fi
+        ;;
+    esac
     IS_LINUX=0; IS_MAC=1
     ;;
   *) echo "Unsupported OS: $OS"; exit 1 ;;
 esac
 
-TARBALL_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
+TARBALL_URL=""
+if [ -n "$TARBALL" ]; then
+  TARBALL_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
+fi
 
 # ── Banner ────────────────────────────────────────────────
 echo -e "${BOLD}"
@@ -76,29 +95,61 @@ write_ok "P2P port:    $P2P_PORT"
 write_ok "RPC port:    $RPC_PORT"
 echo ""
 
-# ── Download ──────────────────────────────────────────────
-write_step "Downloading ckb-light-client v${VERSION}"
+# ── Download / Build ──────────────────────────────────────
+write_step "Getting ckb-light-client v${VERSION}"
 mkdir -p "${INSTALL_DIR}/bin" "${DATA_DIR}/store" "${DATA_DIR}/network"
 
-TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+if [ "$BUILD_FROM_SOURCE" = "1" ]; then
+  write_info "Building from source (arm64 — no prebuilt binary for this release)"
 
-if command -v curl &>/dev/null; then
-  curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
-elif command -v wget &>/dev/null; then
-  wget -q -O "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  # Install Rust if needed
+  if ! command -v cargo &>/dev/null; then
+    write_info "Installing Rust toolchain..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --quiet
+    source "$HOME/.cargo/env"
+  fi
+
+  # Install build deps
+  if [ "$IS_LINUX" = "1" ] && command -v apt-get &>/dev/null; then
+    write_info "Installing build dependencies..."
+    sudo apt-get install -y -qq build-essential pkg-config libssl-dev clang 2>/dev/null || true
+  fi
+
+  TMP_SRC="$(mktemp -d)"
+  write_info "Cloning ckb-light-client v${VERSION}..."
+  git clone --depth=1 --branch "v${VERSION}" \
+    "https://github.com/${REPO}.git" "$TMP_SRC" 2>&1 | tail -3
+
+  write_info "Compiling (this takes 20-30 min on arm64)..."
+  cd "$TMP_SRC"
+  cargo build --release --bin ckb-light-client 2>&1 | tail -5
+  cp "target/release/ckb-light-client" "${INSTALL_DIR}/bin/${BINARY}"
+  cd - >/dev/null
+  rm -rf "$TMP_SRC"
+  write_ok "Built and installed from source"
+
 else
-  write_error "curl or wget required"; exit 1
+  TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TMP_DIR"' EXIT
+
+  if command -v curl &>/dev/null; then
+    curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  elif command -v wget &>/dev/null; then
+    wget -q -O "${TMP_DIR}/${TARBALL}" "$TARBALL_URL"
+  else
+    write_error "curl or wget required"; exit 1
+  fi
+
+  tar -xzf "${TMP_DIR}/${TARBALL}" -C "$TMP_DIR"
+  BIN_PATH="$(find "$TMP_DIR" -name "ckb-light-client" -type f | head -1)"
+  if [ -z "$BIN_PATH" ]; then
+    write_error "Binary not found in tarball"; exit 1
+  fi
+  cp "$BIN_PATH" "${INSTALL_DIR}/bin/${BINARY}"
+  write_ok "Binary installed: ${INSTALL_DIR}/bin/${BINARY}"
 fi
 
-tar -xzf "${TMP_DIR}/${TARBALL}" -C "$TMP_DIR"
-BIN_PATH="$(find "$TMP_DIR" -name "ckb-light-client" -type f | head -1)"
-if [ -z "$BIN_PATH" ]; then
-  write_error "Binary not found in tarball"; exit 1
-fi
-cp "$BIN_PATH" "${INSTALL_DIR}/bin/${BINARY}"
 chmod +x "${INSTALL_DIR}/bin/${BINARY}"
-write_ok "Binary installed: ${INSTALL_DIR}/bin/${BINARY}"
 
 # ── Config file ───────────────────────────────────────────
 write_step "Writing config"
