@@ -10,6 +10,7 @@ One-command installers for Nervos CKB network tools. Works on Linux, macOS, and 
 | [ckb-light](./ckb-light/) | CKB light client — headers only, ~50MB | v0.5.4 | Linux · macOS · Windows |
 | [ckb-node](./ckb-node/) | CKB full node — complete blockchain | v0.204.0 | Linux · macOS · Windows |
 | [ckb-cli](./ckb-cli/) | CKB command-line wallet & tools | v2.0.0 | Linux · macOS · Windows |
+| [ckb-miner](./ckb-miner/) | CKB CPU/GPU miner (Eaglesong) | v0.25.0 | Linux · Windows |
 
 ## Quick Start
 
@@ -69,15 +70,29 @@ irm https://raw.githubusercontent.com/toastmanAu/ckb-access/main/ckb-cli/install
 
 ---
 
+### CKB Miner
+CPU/GPU mining for CKB (Eaglesong). Choose CPU, CUDA, or OpenCL variant.
+
+**Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/toastmanAu/ckb-access/main/ckb-miner/install.sh | bash
+```
+**Windows:**
+```powershell
+irm https://raw.githubusercontent.com/toastmanAu/ckb-access/main/ckb-miner/install.ps1 | iex
+```
+
+---
+
 ## Platform Support
 
-| Platform | fiber | ckb-light | ckb-node | ckb-cli |
-|----------|-------|-----------|----------|---------|
-| Linux x86_64 | ✅ | ✅ | ✅ | ✅ |
-| Linux arm64 (Pi/OrangePi) | ✅ | ⚙️ build* | ✅ | ✅ |
-| macOS x86_64 | ✅ | ✅ | ✅ | ✅ |
-| macOS arm64 (M1/M2/M3) | ✅ | ⚙️ build* | ✅ | ✅ |
-| Windows x86_64 | ✅ | ✅ | ✅ | ✅ |
+| Platform | fiber | ckb-light | ckb-node | ckb-cli | ckb-miner |
+|----------|-------|-----------|----------|---------|-----------|
+| Linux x86_64 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Linux arm64 (Pi/OrangePi) | ✅ | ⚙️ build* | ✅ | ✅ | — |
+| macOS x86_64 | ✅ | ✅ | ✅ | ✅ | — |
+| macOS arm64 (M1/M2/M3) | ✅ | ⚙️ build* | ✅ | ✅ | — |
+| Windows x86_64 | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 *ckb-light arm64 prebuilt binary coming in next release ([#272](https://github.com/nervosnetwork/ckb-light-client/issues/272)). Installer auto-builds from source in the meantime.
 
