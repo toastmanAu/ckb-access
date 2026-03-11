@@ -81,6 +81,7 @@ detect_platform() {
   esac
 
   TARBALL="fnn_${VERSION}-${PLATFORM}.tar.gz"
+  # fnn binary is network-agnostic — the chain is set via config.yml, not the binary
   DOWNLOAD_URL="${RELEASES}/${TARBALL}"
 }
 
