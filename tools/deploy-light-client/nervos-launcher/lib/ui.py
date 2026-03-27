@@ -273,34 +273,75 @@ class App:
                     self.running = False
                     break
 
-                # Track held buttons for combo detection (Select+Start = exit)
+                # Track held buttons for combo detection
                 if event.type == pygame.JOYBUTTONDOWN:
                     self._held_buttons.add(event.button)
                 elif event.type == pygame.JOYBUTTONUP:
                     self._held_buttons.discard(event.button)
 
-                # Check Select+Start exit combo (using mapped buttons)
-                select_btn = self.button_map.get("select")
-                start_btn = self.button_map.get("start")
-                if select_btn is not None and start_btn is not None:
-                    if {select_btn, start_btn}.issubset(self._held_buttons):
+                # Check Select+Start exit combo
+                select_map = self.button_map.get("select", {})
+                start_map = self.button_map.get("start", {})
+                if select_map.get("type") == "button" and start_map.get("type") == "button":
+                    if {select_map["id"], start_map["id"]}.issubset(self._held_buttons):
                         self.running = False
                         break
 
-                # Map hat (d-pad) to synthetic key events for easier handling
+                # ── Resolve mapped directions from any input type ──
+                active_dirs = set()
+
                 if event.type == pygame.JOYHATMOTION:
                     x, y = event.value
-                    # Clear held state for released directions
-                    for d in ["up", "down", "left", "right"]:
-                        if d not in self._active_dpad_dirs(x, y):
-                            self._dpad_held.pop(d, None)
-                    # Fire events for new presses
-                    for d in self._active_dpad_dirs(x, y):
-                        if d not in self._dpad_held:
-                            self._dpad_held[d] = {"next_fire": now + self._dpad_repeat_delay}
-                            self._fire_dpad(d)
+                    # Check which mapped directions match this hat
+                    for dname in ("up", "down", "left", "right"):
+                        m = self.button_map.get(dname, {})
+                        if m.get("type") == "hat" and m.get("value") == list(event.value):
+                            active_dirs.add(dname)
 
-                # Button handling via configurable map
+                if event.type == pygame.JOYAXISMOTION:
+                    for dname in ("up", "down", "left", "right"):
+                        m = self.button_map.get(dname, {})
+                        if m.get("type") == "axis" and m.get("id") == event.axis:
+                            if m["direction"] > 0 and event.value > 0.5:
+                                active_dirs.add(dname)
+                            elif m["direction"] < 0 and event.value < -0.5:
+                                active_dirs.add(dname)
+
+                # Also check if a button is mapped as a direction
+                if event.type == pygame.JOYBUTTONDOWN:
+                    for dname in ("up", "down", "left", "right"):
+                        m = self.button_map.get(dname, {})
+                        if m.get("type") == "button" and m.get("id") == event.button:
+                            active_dirs.add(dname)
+
+                # Fire d-pad events for newly active directions
+                for d in active_dirs:
+                    if d not in self._dpad_held:
+                        self._dpad_held[d] = {"next_fire": now + self._dpad_repeat_delay}
+                        self._fire_dpad(d)
+
+                # Clear released directions on hat neutral
+                if event.type == pygame.JOYHATMOTION and event.value == (0, 0):
+                    for d in list(self._dpad_held.keys()):
+                        m = self.button_map.get(d, {})
+                        if m.get("type") == "hat":
+                            self._dpad_held.pop(d, None)
+
+                # Clear released directions on axis return to center
+                if event.type == pygame.JOYAXISMOTION and abs(event.value) < 0.3:
+                    for d in list(self._dpad_held.keys()):
+                        m = self.button_map.get(d, {})
+                        if m.get("type") == "axis" and m.get("id") == event.axis:
+                            self._dpad_held.pop(d, None)
+
+                # Clear released button-as-direction
+                if event.type == pygame.JOYBUTTONUP:
+                    for d in list(self._dpad_held.keys()):
+                        m = self.button_map.get(d, {})
+                        if m.get("type") == "button" and m.get("id") == event.button:
+                            self._dpad_held.pop(d, None)
+
+                # ── Button handling via configurable map ──
                 if event.type == pygame.JOYBUTTONDOWN:
                     btn_name = self.get_button_name(event.button)
                     if btn_name == "b":
@@ -308,7 +349,6 @@ class App:
                     elif btn_name == "start":
                         self.go_home()
                     elif self.current_page:
-                        # Attach resolved name to the event for screens to use
                         event.dict["btn"] = btn_name
                         self.current_page.handle_input(event)
 
@@ -339,8 +379,12 @@ class App:
 
     def get_button_name(self, button_id):
         """Resolve a pygame button ID to our internal name using the button map."""
-        for name, bid in self.button_map.items():
-            if bid == button_id:
+        for name, mapping in self.button_map.items():
+            if isinstance(mapping, dict):
+                if mapping.get("type") == "button" and mapping.get("id") == button_id:
+                    return name
+            elif mapping == button_id:
+                # Legacy format (plain int)
                 return name
         return None
 
