@@ -30,20 +30,52 @@ class PeersPage(Page):
         items = []
         for p in self.raw_peers:
             node_id = p.get("node_id", "—")
-            short_id = node_id[:20] + "..." if len(node_id) > 20 else node_id
             items.append({
-                "text": short_id,
+                "text": node_id,  # full ID, draw() handles fitting
                 "color": COLORS["text"],
             })
         self.peer_list.update_items(items)
 
     def draw(self, surface):
+        w = surface.get_width()
+        margin = int(w * 0.025)  # 2.5% margin
+        content_w = w - margin * 2
+
         draw_status_bar(surface, "Peers", f"{len(self.raw_peers)} connected")
 
         if not self.peer_list.items:
-            draw_text(surface, "No peers connected", 16, 60, COLORS["muted"], size=14)
+            draw_text(surface, "No peers connected", margin, 60, COLORS["muted"], size=14)
         else:
-            self.peer_list.draw(surface)
+            # Custom draw with full-width IDs
+            y = self.peer_list.area_top
+            vis = self.peer_list.visible_count
+            offset = self.peer_list.scroll_offset
+            items = self.peer_list.items
+
+            for i in range(offset, min(offset + vis, len(items))):
+                item = items[i]
+                is_sel = (i == self.peer_list.cursor)
+                item_h = self.peer_list.item_height - 2
+                rect = pygame.Rect(margin, y, content_w, item_h)
+
+                if is_sel:
+                    pygame.draw.rect(surface, COLORS["surface2"], rect, border_radius=4)
+                    pygame.draw.rect(surface, COLORS["accent"], rect, width=1, border_radius=4)
+
+                draw_text(surface, item["text"], margin + 8, y + 6,
+                          item.get("color", COLORS["text"]), size=12,
+                          max_width=content_w - 16)
+
+                y += self.peer_list.item_height
+
+            # Scroll indicator
+            total = len(items)
+            if total > vis:
+                bar_area = vis * self.peer_list.item_height
+                bar_h = max(10, int((vis / total) * bar_area))
+                bar_y = self.peer_list.area_top + int((offset / total) * bar_area)
+                pygame.draw.rect(surface, COLORS["dim"],
+                                 (w - 4, bar_y, 3, bar_h), border_radius=2)
 
         draw_nav_bar(surface, [("B", "Back"), ("A", "Detail"), ("D-pad", "Scroll")])
 
@@ -154,9 +186,14 @@ class PeerDetailPage(Page):
 
     @property
     def visible_lines(self):
-        return (480 - 32 - 28) // 18
+        return (self.app.height - 32 - 28) // 18
 
     def draw(self, surface):
+        w = surface.get_width()
+        h = surface.get_height()
+        margin = int(w * 0.025)
+        content_w = w - margin * 2
+
         draw_status_bar(surface, "Peer Detail", "")
 
         y = 38
@@ -169,11 +206,11 @@ class PeerDetailPage(Page):
                 y += 6
                 continue
             if is_label:
-                draw_text(surface, text, 16, y, color or COLORS["muted"], size=10, bold=True)
+                draw_text(surface, text, margin, y, color or COLORS["muted"], size=10, bold=True)
                 y += 16
             else:
-                draw_text(surface, text, 16, y, color or COLORS["text"], size=13,
-                          max_width=surface.get_width() - 32)
+                draw_text(surface, text, margin, y, color or COLORS["text"], size=13,
+                          max_width=content_w)
                 y += 18
 
         # Scroll indicator

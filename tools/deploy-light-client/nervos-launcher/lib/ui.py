@@ -132,26 +132,38 @@ class ScrollList:
         self.scroll_offset = min(self.scroll_offset, max(0, len(items) - self.visible_count))
 
     def draw(self, surface):
+        w = surface.get_width()
+        margin = int(w * 0.025)  # 2.5% side margin
+        content_w = w - margin * 2
+
         y = self.area_top
         vis = self.visible_count
         for i in range(self.scroll_offset, min(self.scroll_offset + vis, len(self.items))):
             item = self.items[i]
-            rect = pygame.Rect(8, y, surface.get_width() - 16, self.item_height - 2)
+            rect = pygame.Rect(margin, y, content_w, self.item_height - 2)
             is_selected = (i == self.cursor)
 
             if is_selected:
                 pygame.draw.rect(surface, COLORS["surface2"], rect, border_radius=4)
                 pygame.draw.rect(surface, COLORS["accent"], rect, width=1, border_radius=4)
 
+            text_x = margin + int(content_w * 0.02)
             color = item.get("color", COLORS["text"])
-            draw_text(surface, item["text"], 16, y + 4, color, size=13,
-                      max_width=surface.get_width() - 100)
 
-            if "subtext" in item:
+            if "subtext" in item and item["subtext"]:
+                # Text on left, subtext on right — split at 70/30
+                text_w = int(content_w * 0.68)
+                draw_text(surface, item["text"], text_x, y + 4, color, size=13,
+                          max_width=text_w)
                 st_font = get_font(11)
                 st_w = st_font.size(item["subtext"])[0]
-                draw_text(surface, item["subtext"], surface.get_width() - st_w - 16, y + 6,
+                draw_text(surface, item["subtext"],
+                          margin + content_w - st_w - int(content_w * 0.02), y + 6,
                           item.get("subcolor", COLORS["muted"]), size=11)
+            else:
+                # Full width text
+                draw_text(surface, item["text"], text_x, y + 4, color, size=13,
+                          max_width=content_w - int(content_w * 0.04))
 
             y += self.item_height
 
