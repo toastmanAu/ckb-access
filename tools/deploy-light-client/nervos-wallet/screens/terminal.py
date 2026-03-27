@@ -33,9 +33,11 @@ class TerminalPage(Page):
         # Pre-built quick commands
         self.quick_cmds = [
             "status.sh",
+            "status.sh",
             "start.sh",
             "stop.sh",
             "test-rpc.sh",
+            "curl -sf https://api.github.com/repos/nervosnetwork/ckb-light-client/releases/latest | python3 -c 'import sys,json;r=json.load(sys.stdin);print(r[\"tag_name\"],\"-\",len(r[\"assets\"]),\"assets\")'",
             "top -bn1 | head -8",
             "df -h",
             "free -m",
