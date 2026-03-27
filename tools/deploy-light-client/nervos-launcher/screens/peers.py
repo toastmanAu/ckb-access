@@ -1,10 +1,10 @@
 """
-peers.py — Connected peers screen
-Shows list of connected peers with addresses and protocols.
+peers.py — Connected peers list + detail view
+List shows peer IDs, press A to see full detail for selected peer.
 """
 
 import pygame
-from lib.ui import Page, ScrollList, COLORS, draw_text, draw_status_bar, draw_nav_bar
+from lib.ui import Page, ScrollList, COLORS, draw_text, draw_status_bar, draw_nav_bar, draw_hline
 
 
 class PeersPage(Page):
@@ -12,7 +12,8 @@ class PeersPage(Page):
     def __init__(self, app, rpc):
         super().__init__(app)
         self.rpc = rpc
-        self.peer_list = ScrollList([], item_height=48, visible_area_top=44, visible_area_bottom=32)
+        self.peer_list = ScrollList([], item_height=30, visible_area_top=44, visible_area_bottom=32)
+        self.raw_peers = []
         self.refresh_timer = 0
 
     def on_enter(self):
@@ -25,53 +26,26 @@ class PeersPage(Page):
             self.refresh_timer = 0
 
     def _refresh(self):
-        peers = self.rpc.peers() or []
+        self.raw_peers = self.rpc.peers() or []
         items = []
-        for p in peers:
-            node_id = p.get("node_id", "")[:16] + "..."
-            addresses = p.get("addresses", [])
-            addr = addresses[0].get("address", "—") if addresses else "—"
-            version = p.get("version", "")
+        for p in self.raw_peers:
+            node_id = p.get("node_id", "—")
+            short_id = node_id[:20] + "..." if len(node_id) > 20 else node_id
             items.append({
-                "text": node_id,
-                "subtext": version or "—",
-                "detail": addr,
+                "text": short_id,
                 "color": COLORS["text"],
-                "subcolor": COLORS["green"],
             })
         self.peer_list.update_items(items)
 
     def draw(self, surface):
-        peers = self.rpc.peers() or []
-        draw_status_bar(surface, "Peers", f"{len(peers)} connected")
+        draw_status_bar(surface, "Peers", f"{len(self.raw_peers)} connected")
 
         if not self.peer_list.items:
             draw_text(surface, "No peers connected", 16, 60, COLORS["muted"], size=14)
         else:
-            # Custom draw for two-line items
-            y = 44
-            vis = self.peer_list.visible_count
-            offset = self.peer_list.scroll_offset
-            items = self.peer_list.items
+            self.peer_list.draw(surface)
 
-            for i in range(offset, min(offset + vis, len(items))):
-                item = items[i]
-                is_sel = (i == self.peer_list.cursor)
-                rect = pygame.Rect(8, y, surface.get_width() - 16, 44)
-
-                if is_sel:
-                    pygame.draw.rect(surface, COLORS["surface2"], rect, border_radius=4)
-                    pygame.draw.rect(surface, COLORS["accent"], rect, width=1, border_radius=4)
-
-                draw_text(surface, item["text"], 16, y + 4, COLORS["text"], size=12)
-                draw_text(surface, item.get("subtext", ""), surface.get_width() - 80, y + 4,
-                          COLORS["green"], size=11)
-                draw_text(surface, item.get("detail", ""), 16, y + 22, COLORS["muted"], size=10,
-                          max_width=surface.get_width() - 32)
-
-                y += 48
-
-        draw_nav_bar(surface, [("B", "Back"), ("A", "Refresh"), ("D-pad", "Scroll")])
+        draw_nav_bar(surface, [("B", "Back"), ("A", "Detail"), ("D-pad", "Scroll")])
 
     def handle_input(self, event):
         if event.type == pygame.USEREVENT:
@@ -79,12 +53,149 @@ class PeersPage(Page):
             if d == "up": self.peer_list.move(-1)
             elif d == "down": self.peer_list.move(1)
             return True
+
         if event.type == pygame.JOYBUTTONDOWN and event.dict.get("btn") == "a":
-            self._refresh()
+            idx = self.peer_list.cursor
+            if 0 <= idx < len(self.raw_peers):
+                if "peer_detail" in self.app.pages:
+                    self.app.pages["peer_detail"].set_peer(self.raw_peers[idx])
+                    self.app.navigate("peer_detail")
             return True
+
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP: self.peer_list.move(-1)
             elif event.key == pygame.K_DOWN: self.peer_list.move(1)
-            elif event.key == pygame.K_RETURN: self._refresh()
+            elif event.key == pygame.K_RETURN:
+                idx = self.peer_list.cursor
+                if 0 <= idx < len(self.raw_peers):
+                    if "peer_detail" in self.app.pages:
+                        self.app.pages["peer_detail"].set_peer(self.raw_peers[idx])
+                        self.app.navigate("peer_detail")
             return True
+
+        return False
+
+
+class PeerDetailPage(Page):
+    """Full detail view for a single peer."""
+
+    def __init__(self, app):
+        super().__init__(app)
+        self.peer = {}
+        self.scroll = 0
+        self.lines = []
+
+    def set_peer(self, peer_data):
+        self.peer = peer_data
+        self.scroll = 0
+        self._build_lines()
+
+    def _build_lines(self):
+        p = self.peer
+        self.lines = []
+
+        self.lines.append(("NODE ID", COLORS["muted"], True))
+        self.lines.append((p.get("node_id", "—"), COLORS["accent"], False))
+        self.lines.append(("", None, False))
+
+        version = p.get("version", "")
+        if version:
+            self.lines.append(("VERSION", COLORS["muted"], True))
+            self.lines.append((version, COLORS["text"], False))
+            self.lines.append(("", None, False))
+
+        # Addresses
+        addresses = p.get("addresses", [])
+        if addresses:
+            self.lines.append(("ADDRESSES", COLORS["muted"], True))
+            for addr in addresses:
+                a = addr if isinstance(addr, str) else addr.get("address", str(addr))
+                self.lines.append((a, COLORS["text"], False))
+            self.lines.append(("", None, False))
+
+        # Connected duration
+        connected = p.get("connected_duration", "")
+        if connected:
+            self.lines.append(("CONNECTED", COLORS["muted"], True))
+            # Convert from hex ms to readable
+            try:
+                ms = int(connected, 16) if isinstance(connected, str) else connected
+                secs = ms // 1000
+                mins = secs // 60
+                hrs = mins // 60
+                if hrs > 0:
+                    self.lines.append((f"{hrs}h {mins % 60}m", COLORS["green"], False))
+                elif mins > 0:
+                    self.lines.append((f"{mins}m {secs % 60}s", COLORS["green"], False))
+                else:
+                    self.lines.append((f"{secs}s", COLORS["green"], False))
+            except:
+                self.lines.append((str(connected), COLORS["text"], False))
+            self.lines.append(("", None, False))
+
+        # Protocols
+        protocols = p.get("protocols", [])
+        if protocols:
+            self.lines.append(("PROTOCOLS", COLORS["muted"], True))
+            for proto in protocols:
+                if isinstance(proto, dict):
+                    pid = proto.get("id", "")
+                    pver = proto.get("version", "")
+                    self.lines.append((f"  {pid}: {pver}", COLORS["dim"], False))
+                else:
+                    self.lines.append((f"  {proto}", COLORS["dim"], False))
+            self.lines.append(("", None, False))
+
+        # Is outbound
+        is_out = p.get("is_outbound")
+        if is_out is not None:
+            self.lines.append(("DIRECTION", COLORS["muted"], True))
+            self.lines.append(("Outbound" if is_out else "Inbound", COLORS["text"], False))
+
+    @property
+    def visible_lines(self):
+        return (480 - 32 - 28) // 18
+
+    def draw(self, surface):
+        draw_status_bar(surface, "Peer Detail", "")
+
+        y = 38
+        vis = self.visible_lines
+        total = len(self.lines)
+
+        for i in range(self.scroll, min(self.scroll + vis, total)):
+            text, color, is_label = self.lines[i]
+            if not text:
+                y += 6
+                continue
+            if is_label:
+                draw_text(surface, text, 16, y, color or COLORS["muted"], size=10, bold=True)
+                y += 16
+            else:
+                draw_text(surface, text, 16, y, color or COLORS["text"], size=13,
+                          max_width=surface.get_width() - 32)
+                y += 18
+
+        # Scroll indicator
+        if total > vis:
+            bar_area = vis * 18
+            bar_h = max(10, int((vis / total) * bar_area))
+            bar_y = 38 + int((self.scroll / max(1, total)) * bar_area)
+            bar_y = min(bar_y, 38 + bar_area - bar_h)
+            pygame.draw.rect(surface, COLORS["dim"], (636, bar_y, 3, bar_h), border_radius=2)
+
+        draw_nav_bar(surface, [("B", "Back"), ("D-pad", "Scroll")])
+
+    def handle_input(self, event):
+        if event.type == pygame.USEREVENT:
+            d = event.dict.get("dpad", "")
+            if d == "up": self.scroll = max(0, self.scroll - 2)
+            elif d == "down": self.scroll = min(max(0, len(self.lines) - self.visible_lines), self.scroll + 2)
+            return True
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP: self.scroll = max(0, self.scroll - 2)
+            elif event.key == pygame.K_DOWN: self.scroll = min(max(0, len(self.lines) - self.visible_lines), self.scroll + 2)
+            return True
+
         return False

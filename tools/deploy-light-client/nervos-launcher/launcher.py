@@ -31,7 +31,7 @@ from lib.ui import App
 from lib.rpc import LightClientRPC, StatusPoller
 from screens.home import HomePage
 from screens.explorer import ExplorerPage
-from screens.peers import PeersPage
+from screens.peers import PeersPage, PeerDetailPage
 from screens.settings import SettingsPage
 from screens.terminal import TerminalPage
 from screens.text_viewer import TextViewerPage
@@ -101,6 +101,7 @@ def main():
     app.register_page("home",        HomePage(app, poller))
     app.register_page("explorer",    ExplorerPage(app, rpc))
     app.register_page("peers",       PeersPage(app, rpc))
+    app.register_page("peer_detail", PeerDetailPage(app))
     app.register_page("settings",    SettingsPage(app, rpc, install_dir))
     app.register_page("terminal",    TerminalPage(app, install_dir))
     app.register_page("text_viewer", TextViewerPage(app))
