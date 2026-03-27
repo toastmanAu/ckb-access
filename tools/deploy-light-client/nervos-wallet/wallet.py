@@ -35,6 +35,7 @@ from screens.peers import PeersPage
 from screens.settings import SettingsPage
 from screens.terminal import TerminalPage
 from screens.text_viewer import TextViewerPage
+from screens.install_progress import InstallProgressPage
 
 
 def find_install_dir():
@@ -102,6 +103,7 @@ def main():
     app.register_page("settings",    SettingsPage(app, rpc, install_dir))
     app.register_page("terminal",    TerminalPage(app, install_dir))
     app.register_page("text_viewer", TextViewerPage(app))
+    app.register_page("install_progress", InstallProgressPage(app))
 
     # Start on home
     app.navigate("home")

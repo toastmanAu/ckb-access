@@ -6,10 +6,8 @@ Start/stop light client, toggle boot service, view config.
 import pygame
 import subprocess
 import os
-import threading
-import urllib.request
-import json
 from lib.ui import Page, ScrollList, COLORS, draw_text, draw_status_bar, draw_nav_bar, draw_hline
+from lib.installer import LightClientInstaller, ProgressLog
 
 
 class SettingsPage(Page):
@@ -18,12 +16,14 @@ class SettingsPage(Page):
         super().__init__(app)
         self.rpc = rpc
         self.install_dir = install_dir
+        self.installer = LightClientInstaller(install_dir)
         self.message = ""
         self.message_color = COLORS["text"]
         self.message_timer = 0
         self._installing = False
 
         self.menu = ScrollList([], item_height=32, visible_area_top=80, visible_area_bottom=32)
+        self._wait_for_install = False
         self._rebuild_menu()
 
     def on_enter(self):
@@ -34,6 +34,15 @@ class SettingsPage(Page):
             self.message_timer -= dt
             if self.message_timer <= 0:
                 self.message = ""
+        # Refresh menu after install completes
+        if self._wait_for_install and self.installer.progress.done:
+            self._wait_for_install = False
+            self._installing = False
+            self._rebuild_menu()
+            if self.installer.progress.success:
+                self._set_message("Install complete", COLORS["green"])
+            else:
+                self._set_message("Install failed — check progress log", COLORS["red"])
 
     def _rebuild_menu(self):
         running = self._is_running()
@@ -318,159 +327,17 @@ esac
         return True
 
     def _install_update(self):
-        """Download and install/update the light client binary."""
-        if self._installing:
+        """Launch install with live progress screen."""
+        if self.installer.progress.busy:
             return
-        self._installing = True
-        self._set_message("Checking latest version...", COLORS["accent"], duration=30000)
+        # Navigate to progress screen and start install
+        if "install_progress" in self.app.pages:
+            progress_page = self.app.pages["install_progress"]
+            progress_page.set_progress(self.installer.progress)
+            self.app.navigate("install_progress")
+            network = self._read_network()
+            self.installer.install_async(network)
+            self._installing = True
 
-        def _do_install():
-            try:
-                # Find latest release with arm64 binary
-                arch = os.uname().machine
-                if arch in ("aarch64", "arm64"):
-                    target_arch = "aarch64-linux"
-                elif arch == "x86_64":
-                    target_arch = "x86_64-linux"
-                else:
-                    self._set_message(f"Unsupported arch: {arch}", COLORS["red"])
-                    self._installing = False
-                    return
-
-                # Check GitHub releases for latest version with our binary
-                releases_url = "https://api.github.com/repos/nervosnetwork/ckb-light-client/releases?per_page=5"
-                req = urllib.request.Request(releases_url, headers={"User-Agent": "nervos-wallet"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    releases = json.loads(resp.read().decode())
-
-                # Find first release with matching binary
-                download_url = None
-                version = None
-                for rel in releases:
-                    for asset in rel.get("assets", []):
-                        name = asset.get("name", "")
-                        if target_arch in name and name.endswith(".tar.gz"):
-                            # Prefer portable build
-                            if "portable" in name or download_url is None:
-                                download_url = asset["browser_download_url"]
-                                version = rel["tag_name"]
-                            if "portable" in name:
-                                break
-                    if download_url:
-                        break
-
-                if not download_url:
-                    self._set_message(f"No {target_arch} binary found in releases", COLORS["red"])
-                    self._installing = False
-                    return
-
-                self._set_message(f"Downloading {version}...", COLORS["accent"], duration=60000)
-
-                # Download
-                os.makedirs(os.path.join(self.install_dir, "bin"), exist_ok=True)
-                tarball = os.path.join("/tmp", "ckb-light-update.tar.gz")
-                urllib.request.urlretrieve(download_url, tarball)
-
-                # Extract
-                self._set_message("Extracting...", COLORS["accent"], duration=30000)
-                result = subprocess.run(
-                    f"cd /tmp && tar -xzf ckb-light-update.tar.gz && "
-                    f"find /tmp -name 'ckb-light-client' -type f -newer {tarball} | head -1",
-                    shell=True, capture_output=True, text=True, timeout=30)
-                bin_path = result.stdout.strip()
-
-                if not bin_path:
-                    # Fallback: find any extracted binary
-                    result = subprocess.run(
-                        "find /tmp -name 'ckb-light-client' -type f | head -1",
-                        shell=True, capture_output=True, text=True, timeout=10)
-                    bin_path = result.stdout.strip()
-
-                if not bin_path or not os.path.isfile(bin_path):
-                    self._set_message("Binary not found in archive", COLORS["red"])
-                    self._installing = False
-                    return
-
-                # Stop running instance if any
-                was_running = self._is_running()
-                if was_running:
-                    subprocess.run([os.path.join(self.install_dir, "stop.sh")],
-                                   capture_output=True, timeout=5)
-
-                # Install
-                dest = os.path.join(self.install_dir, "bin", "ckb-light-client")
-                subprocess.run(["cp", bin_path, dest], check=True, timeout=5)
-                os.chmod(dest, 0o755)
-
-                # Download config if missing
-                config_path = os.path.join(self.install_dir, "config.toml")
-                if not os.path.exists(config_path):
-                    self._set_message("Downloading config...", COLORS["accent"], duration=10000)
-                    config_url = "https://raw.githubusercontent.com/nervosnetwork/ckb-light-client/develop/config/testnet.toml"
-                    urllib.request.urlretrieve(config_url, config_path)
-                    os.makedirs(os.path.join(self.install_dir, "data", "store"), exist_ok=True)
-                    os.makedirs(os.path.join(self.install_dir, "data", "network"), exist_ok=True)
-
-                # Create wrapper scripts if missing
-                self._ensure_scripts()
-
-                # Restart if was running
-                if was_running:
-                    subprocess.run([os.path.join(self.install_dir, "start.sh")],
-                                   capture_output=True, timeout=5)
-
-                # Cleanup
-                os.remove(tarball)
-
-                self._set_message(f"Installed {version}", COLORS["green"])
-                self._rebuild_menu()
-
-            except Exception as e:
-                self._set_message(f"Install failed: {e}", COLORS["red"])
-            finally:
-                self._installing = False
-
-        threading.Thread(target=_do_install, daemon=True).start()
-
-    def _ensure_scripts(self):
-        """Create start/stop/status scripts if they don't exist."""
-        scripts = {
-            "start.sh": '''#!/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
-echo "Starting CKB light client..."
-RUST_LOG=info,ckb_light_client=info \\
-  nohup "$DIR/bin/ckb-light-client" run --config-file "$DIR/config.toml" \\
-  >> "$DIR/data/ckb-light.log" 2>&1 &
-echo "PID: $!"
-echo "$!" > "$DIR/data/ckb-light.pid"
-''',
-            "stop.sh": '''#!/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
-PID_FILE="$DIR/data/ckb-light.pid"
-if [ -f "$PID_FILE" ]; then
-  PID=$(cat "$PID_FILE")
-  kill "$PID" 2>/dev/null && echo "Stopped" || echo "Not running"
-  rm -f "$PID_FILE"
-else
-  pkill -f ckb-light-client 2>/dev/null && echo "Stopped" || echo "Not running"
-fi
-''',
-            "status.sh": '''#!/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
-PID_FILE="$DIR/data/ckb-light.pid"
-if [ -f "$PID_FILE" ] && kill -0 $(cat "$PID_FILE") 2>/dev/null; then
-  echo "Running (PID $(cat "$PID_FILE"))"
-else
-  echo "Not running"
-fi
-curl -s -X POST http://127.0.0.1:9000/ \\
-  -H 'Content-Type: application/json' \\
-  -d '{"jsonrpc":"2.0","method":"get_tip_header","params":[],"id":1}' | python3 -m json.tool 2>/dev/null || echo "(RPC not responding)"
-''',
-        }
-        for name, content in scripts.items():
-            path = os.path.join(self.install_dir, name)
-            if not os.path.exists(path):
-                with open(path, "w") as f:
-                    f.write(content)
-                os.chmod(path, 0o755)
+            # Rebuild menu when install finishes (checked in update)
+            self._wait_for_install = True
