@@ -59,10 +59,10 @@ brew install hudochenkov/sshpass/sshpass
 
 If the target is a Knulli device, the script:
 - Installs to `/userdata/ckb-light-client`
-- Creates `/userdata/roms/ports/Nervos-Wallet.sh` launcher
+- Creates `/userdata/roms/ports/Nervos-Launcher.sh` launcher
 - Optionally adds to EmulationStation systems config
 
-After deploy, reboot the handheld or refresh ES — "Nervos Wallet" appears in the Ports menu.
+After deploy, reboot the handheld or refresh ES — "Nervos Launcher" appears in the Ports menu.
 
 ## arm64 Binary Options
 

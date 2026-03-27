@@ -20,7 +20,7 @@ class TerminalPage(Page):
         super().__init__(app)
         self.install_dir = install_dir
         self.lines = [
-            ("Nervos Wallet Terminal", COLORS["accent"]),
+            ("Nervos Launcher Terminal", COLORS["accent"]),
             ("Type commands. D-pad to scroll. B to exit.", COLORS["muted"]),
             ("", COLORS["text"]),
         ]

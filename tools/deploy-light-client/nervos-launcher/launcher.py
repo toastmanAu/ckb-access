@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Nervos Wallet — CKB Light Client companion app for handhelds
+Nervos Launcher — CKB Light Client companion app for handhelds
 A pygame-based port for Knulli/EmulationStation devices.
 
 Screens:

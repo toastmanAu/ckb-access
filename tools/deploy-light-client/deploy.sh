@@ -393,7 +393,7 @@ if [[ "$IS_KNULLI" == "y" ]]; then
   step "Knulli Integration"
 
   $SSH_CMD "mkdir -p /userdata/roms/ports"
-  $SSH_CMD "cat > /userdata/roms/ports/Nervos-Wallet.sh && chmod +x /userdata/roms/ports/Nervos-Wallet.sh" << KNULLI
+  $SSH_CMD "cat > /userdata/roms/ports/Nervos-Launcher.sh && chmod +x /userdata/roms/ports/Nervos-Launcher.sh" << KNULLI
 #!/bin/sh
 echo "=== Nervos CKB Light Client ==="
 echo ""
@@ -411,7 +411,7 @@ echo ""
 echo "Press any key to return to EmulationStation..."
 read -n 1
 KNULLI
-  ok "Launcher: /userdata/roms/ports/Nervos-Wallet.sh"
+  ok "Launcher: /userdata/roms/ports/Nervos-Launcher.sh"
 
   # Try to add ES system entry
   $SSH_CMD "
@@ -420,13 +420,13 @@ KNULLI
       cat >> \"\$ES_FILE\" << 'ESEOF'
 
 nervos:
-  name:      Nervos Wallet
+  name:      Nervos Launcher
   extensions: .sh
   path:      /userdata/roms/ports
   platform:  pc
   emulators:
     ports:
-      default: \"Nervos-Wallet\"
+      default: \"Nervos-Launcher\"
 ESEOF
       echo 'ES_ADDED'
     fi
@@ -532,7 +532,7 @@ echo -e "    ${INSTALL_DIR}/status.sh      Sync progress + node info"
 echo -e "    ${INSTALL_DIR}/test-rpc.sh    Full RPC test suite"
 echo ""
 if [[ "$IS_KNULLI" == "y" ]]; then
-  echo -e "  ${BOLD}Knulli:${RESET} Reboot or refresh ES → look for 'Nervos Wallet' in Ports"
+  echo -e "  ${BOLD}Knulli:${RESET} Reboot or refresh ES → look for 'Nervos Launcher' in Ports"
   echo ""
 fi
 echo "  Re-run this script for additional devices or updates."

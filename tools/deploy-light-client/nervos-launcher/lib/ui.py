@@ -1,5 +1,5 @@
 """
-ui.py — Core UI framework for Nervos Wallet
+ui.py — Core UI framework for Nervos Launcher
 Provides theme, text rendering, menus, scrollable lists, and page management.
 Designed for 640x480 handheld displays with gamepad input.
 """
@@ -206,7 +206,7 @@ class App:
         except:
             self.screen = pygame.display.set_mode((width, height))
 
-        pygame.display.set_caption("Nervos Wallet")
+        pygame.display.set_caption("Nervos Launcher")
         self.clock = pygame.time.Clock()
         self.fps = fps
         self.running = True

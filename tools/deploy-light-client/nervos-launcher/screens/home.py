@@ -32,7 +32,7 @@ class HomePage(Page):
         alive = s.get("alive", False)
         status_text = "● ONLINE" if alive else "○ OFFLINE"
         status_color = COLORS["green"] if alive else COLORS["red"]
-        draw_status_bar(surface, "Nervos Wallet", s.get("version", ""))
+        draw_status_bar(surface, "Nervos Launcher", s.get("version", ""))
 
         # ── Dashboard cards ──────────────────────────────────
         y = 44
