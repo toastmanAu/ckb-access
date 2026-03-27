@@ -86,23 +86,27 @@ SSH_CMD="ssh $SSH_OPTS ${TARGET_USER}@${TARGET_HOST}"
 SCP_CMD="scp -P $SSH_PORT -o StrictHostKeyChecking=accept-new"
 
 echo ""
-info "Testing SSH key auth..."
-if $SSH_CMD "echo ok" &>/dev/null; then
+info "Testing SSH auth..."
+if [[ -n "${SSHPASS:-}" && "$HAS_SSHPASS" = "1" ]]; then
+  # SSHPASS env var set — non-interactive password auth
+  USE_SSHPASS=1
+  SSH_CMD="sshpass -e ssh $SSH_OPTS ${TARGET_USER}@${TARGET_HOST}"
+  SCP_CMD="sshpass -e scp -P $SSH_PORT -o StrictHostKeyChecking=accept-new"
+  $SSH_CMD "echo ok" &>/dev/null || die "SSH auth failed (SSHPASS env)"
+  ok "Password auth (SSHPASS env)"
+elif $SSH_CMD "echo ok" &>/dev/null; then
   ok "SSH key auth works"
+elif [[ "$HAS_SSHPASS" = "1" ]]; then
+  read -s -rp "  SSH password (key auth failed): " SSH_PASS
+  echo ""
+  USE_SSHPASS=1
+  export SSHPASS="$SSH_PASS"
+  SSH_CMD="sshpass -e ssh $SSH_OPTS ${TARGET_USER}@${TARGET_HOST}"
+  SCP_CMD="sshpass -e scp -P $SSH_PORT -o StrictHostKeyChecking=accept-new"
+  $SSH_CMD "echo ok" &>/dev/null || die "SSH auth failed — check credentials"
+  ok "Password auth works"
 else
-  if [[ "$HAS_SSHPASS" = "1" ]]; then
-    read -s -rp "  SSH password (key auth failed): " SSH_PASS
-    echo ""
-    USE_SSHPASS=1
-    SSH_CMD="sshpass -e ssh $SSH_OPTS ${TARGET_USER}@${TARGET_HOST}"
-    SCP_CMD="sshpass -e scp -P $SSH_PORT -o StrictHostKeyChecking=accept-new"
-    export SSHPASS="$SSH_PASS"
-    # Verify password works
-    $SSH_CMD "echo ok" &>/dev/null || die "SSH auth failed — check credentials"
-    ok "Password auth works"
-  else
-    die "SSH key auth failed and sshpass not installed. Install sshpass or set up SSH keys."
-  fi
+  die "SSH key auth failed and sshpass not installed. Install sshpass or set up SSH keys."
 fi
 
 # ── Remote: detect arch ─────────────────────────────────────
