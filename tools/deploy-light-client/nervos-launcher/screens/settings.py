@@ -336,6 +336,8 @@ esac
             progress_page.set_progress(self.installer.progress)
             self.app.navigate("install_progress")
             network = self._read_network()
+            if network == "unknown":
+                network = "testnet"  # default for fresh installs
             self.installer.install_async(network)
             self._installing = True
 

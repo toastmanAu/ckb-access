@@ -228,6 +228,7 @@ class App:
 
         # Button mapping (loaded from data/buttons.json after first-boot config)
         self.button_map = {}  # name -> button_id, e.g. {"a": 0, "b": 1, ...}
+        self._held_buttons = set()  # track currently held buttons for combos
 
         # D-pad repeat
         self._dpad_held = {}
@@ -271,6 +272,20 @@ class App:
                 if event.type == pygame.QUIT:
                     self.running = False
                     break
+
+                # Track held buttons for combo detection (Select+Start = exit)
+                if event.type == pygame.JOYBUTTONDOWN:
+                    self._held_buttons.add(event.button)
+                elif event.type == pygame.JOYBUTTONUP:
+                    self._held_buttons.discard(event.button)
+
+                # Check Select+Start exit combo (using mapped buttons)
+                select_btn = self.button_map.get("select")
+                start_btn = self.button_map.get("start")
+                if select_btn is not None and start_btn is not None:
+                    if {select_btn, start_btn}.issubset(self._held_buttons):
+                        self.running = False
+                        break
 
                 # Map hat (d-pad) to synthetic key events for easier handling
                 if event.type == pygame.JOYHATMOTION:
