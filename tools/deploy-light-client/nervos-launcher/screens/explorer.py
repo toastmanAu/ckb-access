@@ -95,7 +95,7 @@ class ExplorerPage(Page):
         draw_nav_bar(surface, [("B", "Back"), ("A", "Refresh")])
 
     def handle_input(self, event):
-        if event.type == pygame.JOYBUTTONDOWN and event.button == 0:
+        if event.type == pygame.JOYBUTTONDOWN and event.dict.get("btn") == "a":
             self._refresh()
             return True
         if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:

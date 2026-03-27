@@ -90,19 +90,19 @@ class HomePage(Page):
                 self.menu.move(1)
             return True
 
-        # A button = confirm
-        if event.type == pygame.JOYBUTTONDOWN and event.button == 0:
-            selected = self.menu.get_selected()
-            if selected and "action" in selected:
-                if selected["action"] in self.app.pages:
-                    self.app.navigate(selected["action"])
-            return True
-
-        # Select = terminal shortcut
-        if event.type == pygame.JOYBUTTONDOWN and event.button == 6:
-            if "terminal" in self.app.pages:
-                self.app.navigate("terminal")
-            return True
+        # Button actions via mapped names
+        if event.type == pygame.JOYBUTTONDOWN:
+            btn = event.dict.get("btn", "")
+            if btn == "a":
+                selected = self.menu.get_selected()
+                if selected and "action" in selected:
+                    if selected["action"] in self.app.pages:
+                        self.app.navigate(selected["action"])
+                return True
+            if btn == "select":
+                if "terminal" in self.app.pages:
+                    self.app.navigate("terminal")
+                return True
 
         # Keyboard fallback
         if event.type == pygame.KEYDOWN:

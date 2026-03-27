@@ -298,7 +298,7 @@ esac
             elif d == "down": self.menu.move(1)
             return True
 
-        if event.type == pygame.JOYBUTTONDOWN and event.button == 0:
+        if event.type == pygame.JOYBUTTONDOWN and event.dict.get("btn") == "a":
             return self._activate_selected()
 
         if event.type == pygame.KEYDOWN:

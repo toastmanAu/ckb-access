@@ -79,7 +79,7 @@ class PeersPage(Page):
             if d == "up": self.peer_list.move(-1)
             elif d == "down": self.peer_list.move(1)
             return True
-        if event.type == pygame.JOYBUTTONDOWN and event.button == 0:
+        if event.type == pygame.JOYBUTTONDOWN and event.dict.get("btn") == "a":
             self._refresh()
             return True
         if event.type == pygame.KEYDOWN:

@@ -168,7 +168,7 @@ class TerminalPage(Page):
 
         if event.type == pygame.JOYBUTTONDOWN:
             # A = run quick command or input
-            if event.button == 0:
+            if event.dict.get("btn") == "a":
                 if self.input_buffer:
                     self._run_cmd(self.input_buffer)
                     self.input_buffer = ""
@@ -176,20 +176,20 @@ class TerminalPage(Page):
                     self._run_cmd(self.quick_cmds[self.quick_idx])
                 return True
             # L1 = prev quick cmd
-            if event.button == 4:
+            if event.dict.get("btn") == "l1":
                 self.quick_idx = (self.quick_idx - 1) % len(self.quick_cmds)
                 return True
             # R1 = next quick cmd
-            if event.button == 5:
+            if event.dict.get("btn") == "r1":
                 self.quick_idx = (self.quick_idx + 1) % len(self.quick_cmds)
                 return True
             # X = clear output
-            if event.button == 2:
+            if event.dict.get("btn") == "x":
                 self.lines = [("(cleared)", COLORS["muted"])]
                 self.scroll_offset = 0
                 return True
             # Y = history
-            if event.button == 3:
+            if event.dict.get("btn") == "y":
                 if self.history:
                     self.history_idx = (self.history_idx + 1) % len(self.history)
                     self.input_buffer = self.history[-(self.history_idx + 1)]

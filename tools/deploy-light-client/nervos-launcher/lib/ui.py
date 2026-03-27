@@ -226,6 +226,9 @@ class App:
         else:
             self.joystick = None
 
+        # Button mapping (loaded from data/buttons.json after first-boot config)
+        self.button_map = {}  # name -> button_id, e.g. {"a": 0, "b": 1, ...}
+
         # D-pad repeat
         self._dpad_held = {}
         self._dpad_repeat_delay = 400  # ms before first repeat
@@ -282,15 +285,16 @@ class App:
                             self._dpad_held[d] = {"next_fire": now + self._dpad_repeat_delay}
                             self._fire_dpad(d)
 
-                # Button mapping (common Knulli layout):
-                # A=0 (confirm), B=1 (back), X=2, Y=3
-                # L1=4, R1=5, Select=6, Start=7
+                # Button handling via configurable map
                 if event.type == pygame.JOYBUTTONDOWN:
-                    if event.button == 1:  # B = back
+                    btn_name = self.get_button_name(event.button)
+                    if btn_name == "b":
                         self.go_back()
-                    elif event.button == 7:  # Start = home
+                    elif btn_name == "start":
                         self.go_home()
                     elif self.current_page:
+                        # Attach resolved name to the event for screens to use
+                        event.dict["btn"] = btn_name
                         self.current_page.handle_input(event)
 
                 # Keyboard fallback (for testing on desktop)
@@ -317,6 +321,13 @@ class App:
             pygame.display.flip()
 
         pygame.quit()
+
+    def get_button_name(self, button_id):
+        """Resolve a pygame button ID to our internal name using the button map."""
+        for name, bid in self.button_map.items():
+            if bid == button_id:
+                return name
+        return None
 
     def _active_dpad_dirs(self, x, y):
         dirs = []

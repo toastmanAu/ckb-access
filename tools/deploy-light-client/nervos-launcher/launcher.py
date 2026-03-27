@@ -36,6 +36,7 @@ from screens.settings import SettingsPage
 from screens.terminal import TerminalPage
 from screens.text_viewer import TextViewerPage
 from screens.install_progress import InstallProgressPage
+from screens.button_map import ButtonMapPage, load_button_config
 
 
 def find_install_dir():
@@ -104,9 +105,17 @@ def main():
     app.register_page("terminal",    TerminalPage(app, install_dir))
     app.register_page("text_viewer", TextViewerPage(app))
     app.register_page("install_progress", InstallProgressPage(app))
+    app.register_page("button_map", ButtonMapPage(app, install_dir,
+                       on_complete=lambda m: app.go_home()))
 
-    # Start on home
-    app.navigate("home")
+    # Check for button config — show mapping screen on first boot
+    btn_config = load_button_config(install_dir)
+    if btn_config:
+        app.button_map = btn_config
+        app.navigate("home")
+    else:
+        # First boot — must map buttons before anything else
+        app.navigate("button_map")
 
     # Run
     try:
