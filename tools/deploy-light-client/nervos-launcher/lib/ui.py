@@ -341,6 +341,12 @@ class App:
                         if m.get("type") == "button" and m.get("id") == event.button:
                             self._dpad_held.pop(d, None)
 
+                # ── Forward raw hat/axis events to current page ──
+                # (needed for button mapping screen to capture d-pad/stick)
+                if event.type in (pygame.JOYHATMOTION, pygame.JOYAXISMOTION):
+                    if self.current_page:
+                        self.current_page.handle_input(event)
+
                 # ── Button handling via configurable map ──
                 if event.type == pygame.JOYBUTTONDOWN:
                     btn_name = self.get_button_name(event.button)
